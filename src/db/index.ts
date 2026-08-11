@@ -1,0 +1,91 @@
+import { SQLiteDatabase } from 'expo-sqlite';
+
+export async function initDatabase(db: SQLiteDatabase) {
+  try {
+    await db.execAsync(`
+      PRAGMA foreign_keys = ON;
+
+      CREATE TABLE IF NOT EXISTS products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        barcode TEXT UNIQUE,
+        name TEXT NOT NULL,
+        buy_price REAL NOT NULL,
+        sell_price REAL NOT NULL,
+        stock INTEGER NOT NULL DEFAULT 0,
+        is_consignment INTEGER DEFAULT 0,
+        supplier_name TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        transaction_code TEXT UNIQUE,
+        total_amount REAL NOT NULL,
+        total_cost REAL NOT NULL,
+        payment_method TEXT CHECK(payment_method IN ('CASH', 'QRIS', 'UTANG')),
+        customer_name TEXT,
+        status TEXT DEFAULT 'SUCCESS',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS transaction_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        transaction_id INTEGER,
+        product_id INTEGER,
+        product_name TEXT,
+        qty INTEGER NOT NULL,
+        buy_price REAL NOT NULL,
+        sell_price REAL NOT NULL,
+        subtotal REAL NOT NULL,
+        FOREIGN KEY(transaction_id) REFERENCES transactions(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS debts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_name TEXT NOT NULL,
+        phone TEXT,
+        total_debt REAL NOT NULL,
+        remaining_debt REAL NOT NULL,
+        status TEXT DEFAULT 'UNPAID',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS debt_payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        debt_id INTEGER,
+        amount_paid REAL NOT NULL,
+        payment_date TEXT DEFAULT CURRENT_TIMESTAMP,
+        notes TEXT,
+        FOREIGN KEY(debt_id) REFERENCES debts(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS prive_expenses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        type TEXT CHECK(type IN ('PRIVE', 'EXPENSE')),
+        amount REAL NOT NULL,
+        note TEXT NOT NULL,
+        date TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Check if products exist; if not, populate sample products
+    const result = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM products');
+    if (result && result.count === 0) {
+      await db.execAsync(`
+        INSERT INTO products (barcode, name, buy_price, sell_price, stock, is_consignment, supplier_name) VALUES
+        ('899999900001', 'Minyak Goreng Bimoli 1L', 14000, 17000, 24, 0, NULL),
+        ('899999900002', 'Beras Setra Ramos 5kg', 60000, 68000, 10, 0, NULL),
+        ('899999900003', 'Telur Ayam Negeri 1kg', 26000, 29000, 15, 0, NULL),
+        ('899999900004', 'Gorengan Tempe & Tahu (Titipan)', 1000, 1200, 30, 1, 'Bu Agus'),
+        ('899999900005', 'Kue Basah (Titipan)', 2000, 2500, 20, 1, 'Mbak Tri'),
+        ('089686010018', 'Indomie Goreng Original', 2800, 3500, 48, 0, NULL),
+        ('8992696404015', 'Kopi Kapal Api Special 165g', 12500, 14500, 12, 0, NULL),
+        ('899999900006', 'Kerupuk Kaleng (Titipan)', 800, 1000, 40, 1, 'Pak RT');
+      `);
+      console.log('Sample products seeded successfully.');
+    }
+  } catch (error) {
+    console.error('Error initializing database:', error);
+    throw error;
+  }
+}
