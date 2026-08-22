@@ -9,12 +9,13 @@ import {
   SafeAreaView,
   ActivityIndicator,
 } from 'react-native';
-import { useSQLiteContext } from 'expo-sqlite';
+import { useAppSQLiteContext as useSQLiteContext } from '../../src/db/AppDatabaseProvider';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Transaction, TransactionItem } from '../../src/types';
 import { getTransactionDetails } from '../../src/services/posService';
 import { printReceipt, shareReceiptPdf } from '../../src/utils/printHelper';
 import { formatRupiah, formatTanggal } from '../../src/utils/formatters';
+import { getShadowStyle } from '../../src/utils/styleHelper';
 import { Colors } from '../../src/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -128,13 +129,72 @@ export default function ReceiptScreen() {
 
           {/* Totals */}
           <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>TOTAL</Text>
+            <Text style={styles.totalLabel}>TOTAL BELANJA</Text>
             <Text style={styles.totalValue}>{formatRupiah(transaction.total_amount)}</Text>
           </View>
 
-          <View style={styles.methodRow}>
-            <Text style={styles.methodLabel}>Metode Pembayaran</Text>
-            <Text style={styles.methodValue}>{transaction.payment_method}</Text>
+          {/* Payment detail rows */}
+          <View style={styles.detailSection}>
+            {/* Payment method label */}
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Metode Pembayaran</Text>
+              <Text style={styles.detailValue}>
+                {transaction.payment_method === 'CASH+UTANG'
+                  ? 'Tunai + Sisanya Hutang'
+                  : transaction.payment_method === 'CASH'
+                  ? 'Tunai (Cash)'
+                  : transaction.payment_method === 'QRIS'
+                  ? 'QRIS / Transfer'
+                  : 'Hutang / Kasbon'}
+              </Text>
+            </View>
+
+            {/* Cash paid — shown for CASH and CASH+UTANG */}
+            {(transaction.payment_method === 'CASH' || transaction.payment_method === 'CASH+UTANG') &&
+            transaction.cash_paid != null ? (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Uang Diterima</Text>
+                <Text style={styles.detailValue}>{formatRupiah(transaction.cash_paid)}</Text>
+              </View>
+            ) : null}
+
+            {/* Change — full CASH payment */}
+            {transaction.payment_method === 'CASH' && transaction.cash_paid != null && transaction.cash_paid >= transaction.total_amount ? (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Kembalian</Text>
+                <Text style={[styles.detailValue, { color: Colors.success }]}>
+                  {formatRupiah(transaction.cash_paid - transaction.total_amount)}
+                </Text>
+              </View>
+            ) : null}
+
+            {/* Shortfall — CASH+UTANG */}
+            {transaction.payment_method === 'CASH+UTANG' && transaction.debt_amount != null ? (
+              <View style={[styles.detailRow, styles.detailRowHighlight]}>
+                <Text style={[styles.detailLabel, { color: Colors.danger }]}>Kurang / Dicatat Hutang</Text>
+                <Text style={[styles.detailValue, { color: Colors.danger, fontWeight: 'bold' }]}>
+                  {formatRupiah(transaction.debt_amount)}
+                </Text>
+              </View>
+            ) : null}
+
+            {/* Full UTANG */}
+            {transaction.payment_method === 'UTANG' && transaction.debt_amount != null ? (
+              <View style={[styles.detailRow, styles.detailRowHighlight]}>
+                <Text style={[styles.detailLabel, { color: Colors.danger }]}>Total Hutang</Text>
+                <Text style={[styles.detailValue, { color: Colors.danger, fontWeight: 'bold' }]}>
+                  {formatRupiah(transaction.debt_amount)}
+                </Text>
+              </View>
+            ) : null}
+
+            {/* Customer for debt transactions */}
+            {transaction.customer_name && (transaction.payment_method === 'UTANG' || transaction.payment_method === 'CASH+UTANG') ? (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Nama Pelanggan</Text>
+                <Text style={styles.detailValue}>{transaction.customer_name}</Text>
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.receiptFooter}>
@@ -223,11 +283,7 @@ const styles = StyleSheet.create({
     padding: 20,
     borderWidth: 1,
     borderColor: Colors.border,
-    elevation: 3,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
+    ...getShadowStyle(3),
     marginBottom: 20,
   },
   receiptHeader: {
@@ -303,6 +359,36 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
     color: Colors.text,
+  },
+  detailSection: {
+    marginTop: 8,
+    gap: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 8,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 3,
+  },
+  detailRowHighlight: {
+    backgroundColor: '#FFF5F5',
+    paddingHorizontal: 6,
+    borderRadius: 6,
+    marginHorizontal: -6,
+  },
+  detailLabel: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    flex: 1,
+  },
+  detailValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.text,
+    textAlign: 'right',
   },
   receiptFooter: {
     alignItems: 'center',

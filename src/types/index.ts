@@ -7,10 +7,11 @@ export interface Product {
   stock: number;
   is_consignment: number; // 0: Normal product, 1: Consignment (Barang Titipan)
   supplier_name?: string | null;
+  category?: string | null; // SNACK, MINUMAN, BARANG_POKOK
   created_at?: string;
 }
 
-export type PaymentMethod = 'CASH' | 'QRIS' | 'UTANG';
+export type PaymentMethod = 'CASH' | 'QRIS' | 'UTANG' | 'CASH+UTANG';
 
 export interface Transaction {
   id: number;
@@ -18,6 +19,8 @@ export interface Transaction {
   total_amount: number;
   total_cost: number;
   payment_method: PaymentMethod;
+  cash_paid?: number | null;   // Uang tunai yang benar-benar diterima
+  debt_amount?: number | null; // Sisa yang dicatat sebagai hutang
   customer_name?: string | null;
   status: 'SUCCESS' | 'CANCELLED';
   created_at: string;

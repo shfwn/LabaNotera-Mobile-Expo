@@ -14,6 +14,7 @@ export async function initDatabase(db: SQLiteDatabase) {
         stock INTEGER NOT NULL DEFAULT 0,
         is_consignment INTEGER DEFAULT 0,
         supplier_name TEXT,
+        category TEXT DEFAULT 'BARANG_POKOK',
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -22,7 +23,9 @@ export async function initDatabase(db: SQLiteDatabase) {
         transaction_code TEXT UNIQUE,
         total_amount REAL NOT NULL,
         total_cost REAL NOT NULL,
-        payment_method TEXT CHECK(payment_method IN ('CASH', 'QRIS', 'UTANG')),
+        payment_method TEXT CHECK(payment_method IN ('CASH', 'QRIS', 'UTANG', 'CASH+UTANG')),
+        cash_paid REAL,
+        debt_amount REAL,
         customer_name TEXT,
         status TEXT DEFAULT 'SUCCESS',
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -72,15 +75,15 @@ export async function initDatabase(db: SQLiteDatabase) {
     const result = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM products');
     if (result && result.count === 0) {
       await db.execAsync(`
-        INSERT INTO products (barcode, name, buy_price, sell_price, stock, is_consignment, supplier_name) VALUES
-        ('899999900001', 'Minyak Goreng Bimoli 1L', 14000, 17000, 24, 0, NULL),
-        ('899999900002', 'Beras Setra Ramos 5kg', 60000, 68000, 10, 0, NULL),
-        ('899999900003', 'Telur Ayam Negeri 1kg', 26000, 29000, 15, 0, NULL),
-        ('899999900004', 'Gorengan Tempe & Tahu (Titipan)', 1000, 1200, 30, 1, 'Bu Agus'),
-        ('899999900005', 'Kue Basah (Titipan)', 2000, 2500, 20, 1, 'Mbak Tri'),
-        ('089686010018', 'Indomie Goreng Original', 2800, 3500, 48, 0, NULL),
-        ('8992696404015', 'Kopi Kapal Api Special 165g', 12500, 14500, 12, 0, NULL),
-        ('899999900006', 'Kerupuk Kaleng (Titipan)', 800, 1000, 40, 1, 'Pak RT');
+        INSERT INTO products (barcode, name, buy_price, sell_price, stock, is_consignment, supplier_name, category) VALUES
+        ('899999900001', 'Minyak Goreng Bimoli 1L', 14000, 17000, 24, 0, NULL, 'BARANG_POKOK'),
+        ('899999900002', 'Beras Setra Ramos 5kg', 60000, 68000, 10, 0, NULL, 'BARANG_POKOK'),
+        ('899999900003', 'Telur Ayam Negeri 1kg', 26000, 29000, 15, 0, NULL, 'BARANG_POKOK'),
+        ('899999900004', 'Gorengan Tempe & Tahu (Titipan)', 1000, 1200, 30, 1, 'Bu Agus', 'SNACK'),
+        ('899999900005', 'Kue Basah (Titipan)', 2000, 2500, 20, 1, 'Mbak Tri', 'SNACK'),
+        ('089686010018', 'Indomie Goreng Original', 2800, 3500, 48, 0, NULL, 'BARANG_POKOK'),
+        ('8992696404015', 'Kopi Kapal Api Special 165g', 12500, 14500, 12, 0, NULL, 'MINUMAN'),
+        ('899999900006', 'Kerupuk Kaleng (Titipan)', 800, 1000, 40, 1, 'Pak RT', 'SNACK');
       `);
       console.log('Sample products seeded successfully.');
     }

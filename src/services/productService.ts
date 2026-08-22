@@ -22,8 +22,8 @@ export async function addProduct(
   product: Omit<Product, 'id' | 'created_at'>
 ): Promise<number> {
   const result = await db.runAsync(
-    `INSERT INTO products (barcode, name, buy_price, sell_price, stock, is_consignment, supplier_name)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO products (barcode, name, buy_price, sell_price, stock, is_consignment, supplier_name, category)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       product.barcode || null,
       product.name,
@@ -32,6 +32,7 @@ export async function addProduct(
       product.stock,
       product.is_consignment ? 1 : 0,
       product.supplier_name || null,
+      product.category || 'BARANG_POKOK',
     ]
   );
   return result.lastInsertRowId;
@@ -43,7 +44,7 @@ export async function updateProduct(
 ): Promise<void> {
   await db.runAsync(
     `UPDATE products 
-     SET barcode = ?, name = ?, buy_price = ?, sell_price = ?, stock = ?, is_consignment = ?, supplier_name = ?
+     SET barcode = ?, name = ?, buy_price = ?, sell_price = ?, stock = ?, is_consignment = ?, supplier_name = ?, category = ?
      WHERE id = ?`,
     [
       product.barcode || null,
@@ -53,6 +54,7 @@ export async function updateProduct(
       product.stock,
       product.is_consignment ? 1 : 0,
       product.supplier_name || null,
+      product.category || 'BARANG_POKOK',
       product.id,
     ]
   );

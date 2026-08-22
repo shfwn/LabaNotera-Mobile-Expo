@@ -17,7 +17,7 @@ export default function TabLayout() {
           paddingTop: 6,
         },
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: '600',
         },
         headerStyle: {
@@ -33,16 +33,24 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Kasir POS',
-          headerTitle: 'LabaNotera - Kasir Warung',
+          title: 'Beranda',
+          headerTitle: 'Beranda (isi nama warung)',
+          tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="pos"
+        options={{
+          title: 'Kasir',
+          headerTitle: 'Kasir & Transaksi Penjualan',
           tabBarIcon: ({ color, size }) => <Ionicons name="cart-outline" color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="stock"
         options={{
-          title: 'Stok & Titipan',
-          headerTitle: 'Manajemen Stok & Titipan',
+          title: 'Stok Warung',
+          headerTitle: 'Stok & Persediaan',
           tabBarIcon: ({ color, size }) => <Ionicons name="cube-outline" color={color} size={size} />,
         }}
       />
@@ -50,15 +58,15 @@ export default function TabLayout() {
         name="debt"
         options={{
           title: 'Buku Utang',
-          headerTitle: 'Buku Kasbon / Utang Digital',
+          headerTitle: 'Buku Utang & Kasbon',
           tabBarIcon: ({ color, size }) => <Ionicons name="book-outline" color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="report"
         options={{
-          title: 'Laporan',
-          headerTitle: 'Laporan Laba-Rugi & Prive',
+          title: 'Riwayat',
+          headerTitle: 'Riwayat & Hasil Transaksi',
           tabBarIcon: ({ color, size }) => <Ionicons name="stats-chart-outline" color={color} size={size} />,
         }}
       />

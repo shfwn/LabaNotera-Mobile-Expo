@@ -14,7 +14,8 @@ export async function processCheckout(
   cart: CartItem[],
   paymentMethod: PaymentMethod,
   customerName?: string,
-  customerPhone?: string
+  customerPhone?: string,
+  cashPaid?: number
 ): Promise<CheckoutResult> {
   if (cart.length === 0) {
     throw new Error('Keranjang belanja kosong');
@@ -29,11 +30,25 @@ export async function processCheckout(
     totalCost += item.product.buy_price * item.qty;
   }
 
+  // Detect partial payment: CASH with shortfall → treat remaining as UTANG
+  const actualCashPaid = cashPaid ?? (paymentMethod === 'CASH' ? totalAmount : 0);
+  const shortfall = totalAmount - actualCashPaid;
+  const isPartialPayment = paymentMethod === 'CASH' && shortfall > 0;
+  const effectivePaymentMethod: PaymentMethod = isPartialPayment ? 'CASH' : paymentMethod;
+
   // Insert Transaction
   const trxResult = await db.runAsync(
-    `INSERT INTO transactions (transaction_code, total_amount, total_cost, payment_method, customer_name, status)
-     VALUES (?, ?, ?, ?, ?, 'SUCCESS')`,
-    [transactionCode, totalAmount, totalCost, paymentMethod, customerName || null]
+    `INSERT INTO transactions (transaction_code, total_amount, total_cost, payment_method, cash_paid, debt_amount, customer_name, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'SUCCESS')`,
+    [
+      transactionCode,
+      totalAmount,
+      totalCost,
+      isPartialPayment ? 'CASH+UTANG' : paymentMethod,
+      paymentMethod === 'CASH' ? actualCashPaid : null,
+      isPartialPayment ? shortfall : (paymentMethod === 'UTANG' ? totalAmount : null),
+      customerName || null,
+    ]
   );
 
   const transactionId = trxResult.lastInsertRowId;
@@ -62,8 +77,11 @@ export async function processCheckout(
     ]);
   }
 
-  // If Payment is UTANG, record in debts table
-  if (paymentMethod === 'UTANG') {
+  // Record debt: full UTANG method OR partial CASH payment with shortfall
+  const shouldRecordDebt = paymentMethod === 'UTANG' || isPartialPayment;
+  const debtAmount = paymentMethod === 'UTANG' ? totalAmount : shortfall;
+
+  if (shouldRecordDebt) {
     const name = customerName?.trim() || 'Pelanggan Utang';
     // Check if customer already has active debt
     const existingDebt = await db.getFirstAsync<{ id: number; total_debt: number; remaining_debt: number }>(
@@ -72,18 +90,17 @@ export async function processCheckout(
     );
 
     if (existingDebt) {
-      const newTotal = existingDebt.total_debt + totalAmount;
-      const newRemaining = existingDebt.remaining_debt + totalAmount;
-      const newStatus = 'UNPAID';
+      const newTotal = existingDebt.total_debt + debtAmount;
+      const newRemaining = existingDebt.remaining_debt + debtAmount;
       await db.runAsync(
-        `UPDATE debts SET total_debt = ?, remaining_debt = ?, status = ? WHERE id = ?`,
-        [newTotal, newRemaining, newStatus, existingDebt.id]
+        `UPDATE debts SET total_debt = ?, remaining_debt = ?, status = 'UNPAID' WHERE id = ?`,
+        [newTotal, newRemaining, existingDebt.id]
       );
     } else {
       await db.runAsync(
         `INSERT INTO debts (customer_name, phone, total_debt, remaining_debt, status)
          VALUES (?, ?, ?, ?, 'UNPAID')`,
-        [name, customerPhone || null, totalAmount, totalAmount]
+        [name, customerPhone || null, debtAmount, debtAmount]
       );
     }
   }

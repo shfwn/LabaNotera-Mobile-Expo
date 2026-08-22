@@ -8,7 +8,8 @@ import {
   Alert,
   SafeAreaView,
 } from 'react-native';
-import { useSQLiteContext } from 'expo-sqlite';
+import { Platform } from 'react-native';
+import { useAppSQLiteContext as useSQLiteContext } from '../../src/db/AppDatabaseProvider';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -16,6 +17,7 @@ import { FinancialReportSummary, Transaction } from '../../src/types';
 import { getFinancialSummary } from '../../src/services/reportService';
 import { getRecentTransactions } from '../../src/services/posService';
 import { formatRupiah, formatTanggal } from '../../src/utils/formatters';
+import { getShadowStyle } from '../../src/utils/styleHelper';
 import { Colors } from '../../src/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -121,12 +123,18 @@ export default function ReportScreen() {
     `;
 
     try {
-      const { uri } = await Print.printToFileAsync({ html: htmlContent });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, {
-          mimeType: 'application/pdf',
-          dialogTitle: 'Laporan_Keuangan_LabaNotera',
-        });
+      if (Platform.OS === 'web') {
+        await Print.printAsync({ html: htmlContent });
+      } else {
+        const { uri } = await Print.printToFileAsync({ html: htmlContent });
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(uri, {
+            mimeType: 'application/pdf',
+            dialogTitle: 'Laporan_Keuangan_LabaNotera',
+          });
+        } else {
+          await Print.printAsync({ html: htmlContent });
+        }
       }
     } catch (err: any) {
       Alert.alert('Gagal Ekspor PDF', err.message || 'Gagal mengekspor laporan PDF.');
@@ -152,86 +160,6 @@ export default function ReportScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Net Profit Hero Card */}
-        <View style={styles.heroCard}>
-          <Text style={styles.heroLabel}>Laba Bersih Warung (Net Profit)</Text>
-          <Text style={styles.heroValue}>
-            {summary ? formatRupiah(summary.netProfit) : 'Rp 0'}
-          </Text>
-          <Text style={styles.heroSub}>
-            Laba Bersih = Laba Kotor dikurangi Prive (Uang Dapur) & Biaya Operasional.
-          </Text>
-        </View>
-
-        {/* Financial Details Grid */}
-        <Text style={styles.sectionHeader}>Ringkasan Kinerja Warung</Text>
-        
-        <View style={styles.gridContainer}>
-          {/* Total Revenue */}
-          <View style={styles.metricCard}>
-            <View style={styles.metricHeader}>
-              <Text style={styles.metricTitle}>Total Omset</Text>
-              <Ionicons name="arrow-up-circle-outline" color={Colors.success} size={18} />
-            </View>
-            <Text style={styles.metricValue}>
-              {summary ? formatRupiah(summary.totalRevenue) : 'Rp 0'}
-            </Text>
-            <Text style={styles.metricSub}>{summary?.transactionCount || 0} Transaksi</Text>
-          </View>
-
-          {/* Total HPP */}
-          <View style={styles.metricCard}>
-            <View style={styles.metricHeader}>
-              <Text style={styles.metricTitle}>Modal HPP Barang</Text>
-              <Ionicons name="arrow-down-circle-outline" color={Colors.danger} size={18} />
-            </View>
-            <Text style={[styles.metricValue, { color: Colors.danger }]}>
-              {summary ? formatRupiah(summary.totalHPP) : 'Rp 0'}
-            </Text>
-            <Text style={styles.metricSub}>Modal Pokok Barang</Text>
-          </View>
-
-          {/* Gross Profit */}
-          <View style={styles.metricCard}>
-            <View style={styles.metricHeader}>
-              <Text style={styles.metricTitle}>Laba Kotor</Text>
-              <Ionicons name="trending-up-outline" color={Colors.primary} size={18} />
-            </View>
-            <Text style={[styles.metricValue, { color: Colors.primaryDark }]}>
-              {summary ? formatRupiah(summary.grossProfit) : 'Rp 0'}
-            </Text>
-            <Text style={styles.metricSub}>Omset - Modal HPP</Text>
-          </View>
-
-          {/* Consignment Owed */}
-          <View style={styles.metricCard}>
-            <View style={styles.metricHeader}>
-              <Text style={styles.metricTitle}>Utang Titipan Laku</Text>
-              <Ionicons name="people-outline" color={Colors.secondary} size={18} />
-            </View>
-            <Text style={[styles.metricValue, { color: Colors.secondary }]}>
-              {summary ? formatRupiah(summary.totalConsignmentOwed) : 'Rp 0'}
-            </Text>
-            <Text style={styles.metricSub}>Bagi Hasil Titipan Tetangga</Text>
-          </View>
-        </View>
-
-        {/* Expenses Summary Box */}
-        <View style={styles.expenseSummaryBox}>
-          <Text style={styles.expenseSummaryTitle}>Pengeluaran Kasir & Prive</Text>
-          <View style={styles.expenseRow}>
-            <Text style={styles.expenseLabel}>🍳 Uang Dapur / Pribadi (Prive):</Text>
-            <Text style={styles.expenseVal}>
-              {summary ? formatRupiah(summary.totalPrive) : 'Rp 0'}
-            </Text>
-          </View>
-          <View style={styles.expenseRow}>
-            <Text style={styles.expenseLabel}>💡 Biaya Operasional Warung:</Text>
-            <Text style={styles.expenseVal}>
-              {summary ? formatRupiah(summary.totalExpense) : 'Rp 0'}
-            </Text>
-          </View>
-        </View>
 
         {/* Recent Transactions List */}
         <Text style={[styles.sectionHeader, { marginTop: 16 }]}>Transaksi Terakhir</Text>
@@ -312,7 +240,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 18,
     marginBottom: 16,
-    elevation: 3,
+    ...getShadowStyle(3),
   },
   heroLabel: {
     color: Colors.primaryLight,
@@ -337,13 +265,15 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   gridContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
     marginBottom: 12,
   },
+  metricsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
   metricCard: {
-    width: '48.5%',
+    flex: 1,
     backgroundColor: '#FFFFFF',
     borderRadius: 10,
     padding: 12,

@@ -12,9 +12,10 @@ import {
   Linking,
   SafeAreaView,
 } from 'react-native';
-import { useSQLiteContext } from 'expo-sqlite';
+import { useAppSQLiteContext as useSQLiteContext } from '../../src/db/AppDatabaseProvider';
 import { useFocusEffect } from 'expo-router';
 import { Debt, DebtPayment } from '../../src/types';
+import { getShadowStyle } from '../../src/utils/styleHelper';
 import {
   getDebts,
   addDebt,
@@ -124,7 +125,7 @@ export default function DebtScreen() {
     const encodedMessage = encodeURIComponent(message);
     const waUrl = rawPhone
       ? `https://wa.me/${rawPhone}?text=${encodedMessage}`
-      : `whatsapp://send?text=${encodedMessage}`;
+      : `https://api.whatsapp.com/send?text=${encodedMessage}`;
 
     Linking.openURL(waUrl).catch(() => {
       Alert.alert('WhatsApp Tidak Terpasang', 'Aplikasi WhatsApp tidak ditemukan di HP Anda.');
@@ -546,7 +547,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderWidth: 1,
     borderColor: Colors.border,
-    elevation: 1,
+    ...getShadowStyle(1),
   },
   cardTop: {
     flexDirection: 'row',

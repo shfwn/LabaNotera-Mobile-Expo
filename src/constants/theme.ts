@@ -7,6 +7,8 @@ export const Colors = {
   secondaryLight: '#FEF3C7',
   danger: '#EF4444',        // Red for Utang / Stock Low
   dangerLight: '#FEE2E2',
+  warning: '#D97706',       // Deep Amber for partial/short payment
+  warningLight: '#FEF3C7',
   success: '#16A34A',       // Green for Paid / Profit
   successLight: '#DCFCE7',
   background: '#F8FAFC',    // App Light Background

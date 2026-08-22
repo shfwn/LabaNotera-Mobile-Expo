@@ -12,9 +12,10 @@ import {
   Switch,
   SafeAreaView,
 } from 'react-native';
-import { useSQLiteContext } from 'expo-sqlite';
+import { useAppSQLiteContext as useSQLiteContext } from '../../src/db/AppDatabaseProvider';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Product } from '../../src/types';
+import { getShadowStyle } from '../../src/utils/styleHelper';
 import {
   getProducts,
   searchProducts,
@@ -48,6 +49,7 @@ export default function StockScreen() {
   const [stock, setStock] = useState('');
   const [isConsignment, setIsConsignment] = useState(false);
   const [supplierName, setSupplierName] = useState('');
+  const [category, setCategory] = useState<'BARANG_POKOK' | 'SNACK' | 'MINUMAN'>('BARANG_POKOK');
 
   const loadProducts = useCallback(async () => {
     try {
@@ -82,6 +84,7 @@ export default function StockScreen() {
     setStock('10');
     setIsConsignment(false);
     setSupplierName('');
+    setCategory('BARANG_POKOK');
     setIsModalVisible(true);
   };
 
@@ -94,6 +97,7 @@ export default function StockScreen() {
     setStock('10');
     setIsConsignment(false);
     setSupplierName('');
+    setCategory('BARANG_POKOK');
     setIsModalVisible(true);
   };
 
@@ -106,6 +110,7 @@ export default function StockScreen() {
     setStock(product.stock.toString());
     setIsConsignment(product.is_consignment === 1);
     setSupplierName(product.supplier_name || '');
+    setCategory((product.category as any) || 'BARANG_POKOK');
     setIsModalVisible(true);
   };
 
@@ -135,6 +140,7 @@ export default function StockScreen() {
           stock: stockNum,
           is_consignment: isConsignment ? 1 : 0,
           supplier_name: isConsignment ? supplierName.trim() || null : null,
+          category,
         });
         Alert.alert('Berhasil', 'Data produk berhasil diperbarui.');
       } else {
@@ -146,6 +152,7 @@ export default function StockScreen() {
           stock: stockNum,
           is_consignment: isConsignment ? 1 : 0,
           supplier_name: isConsignment ? supplierName.trim() || null : null,
+          category,
         });
         Alert.alert('Berhasil', 'Produk baru berhasil ditambahkan.');
       }
@@ -482,7 +489,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 12,
     gap: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.background,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
@@ -551,7 +558,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderWidth: 1,
     borderColor: Colors.border,
-    elevation: 1,
+    ...getShadowStyle(1),
   },
   cardHeader: {
     flexDirection: 'row',

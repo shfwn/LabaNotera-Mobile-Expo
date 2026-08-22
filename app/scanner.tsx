@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Alert } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Alert, TextInput, Platform } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useSQLiteContext } from 'expo-sqlite';
+import { useAppSQLiteContext as useSQLiteContext } from '../src/db/AppDatabaseProvider';
 import { useRouter } from 'expo-router';
 import { getProductByBarcode } from '../src/services/productService';
 import { formatRupiah } from '../src/utils/formatters';
@@ -11,26 +11,9 @@ import { Ionicons } from '@expo/vector-icons';
 export default function ScannerScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
+  const [manualBarcode, setManualBarcode] = useState('');
   const db = useSQLiteContext();
   const router = useRouter();
-
-  if (!permission) {
-    return <View style={styles.container} />;
-  }
-
-  if (!permission.granted) {
-    return (
-      <View style={styles.permissionContainer}>
-        <Text style={styles.permissionTitle}>Akses Kamera Diperlukan</Text>
-        <Text style={styles.permissionSub}>
-          LabaNotera membutuhkan izin kamera untuk memindai kode batang (barcode) produk warung.
-        </Text>
-        <TouchableOpacity style={styles.permissionBtn} onPress={requestPermission}>
-          <Text style={styles.permissionBtnText}>Izinkan Kamera</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
 
   const handleBarcodeScanned = async ({ data }: { type: string; data: string }) => {
     if (scanned) return;
@@ -81,6 +64,86 @@ export default function ScannerScreen() {
       setScanned(false);
     }
   };
+
+  const handleManualSubmit = () => {
+    if (!manualBarcode.trim()) return;
+    handleBarcodeScanned({ type: 'manual', data: manualBarcode.trim() });
+  };
+
+  if (Platform.OS === 'web') {
+    return (
+      <View style={styles.webContainer}>
+        <View style={styles.topHeader}>
+          <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
+            <Ionicons name="close" color="#FFFFFF" size={24} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Scan / Input Barcode (Web)</Text>
+        </View>
+
+        <View style={styles.webBox}>
+          <Ionicons name="qr-code-outline" color={Colors.primary} size={64} style={{ marginBottom: 16 }} />
+          <Text style={styles.webTitle}>Input Kode Barcode Barang</Text>
+          <Text style={styles.webSub}>
+            Ketik nomor barcode atau gunakan alat scanner USB/Bluetooth.
+          </Text>
+
+          <View style={styles.manualRow}>
+            <TextInput
+              style={styles.webInput}
+              placeholder="Contoh: 899999900001 / 089686010018"
+              value={manualBarcode}
+              onChangeText={setManualBarcode}
+              onSubmitEditing={handleManualSubmit}
+              autoFocus
+            />
+            <TouchableOpacity style={styles.webSubmitBtn} onPress={handleManualSubmit}>
+              <Text style={styles.webSubmitBtnText}>Cari</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.sampleTitle}>Contoh Barcode Sampel:</Text>
+          <View style={styles.samplesRow}>
+            <TouchableOpacity
+              style={styles.sampleChip}
+              onPress={() => {
+                setManualBarcode('899999900001');
+                handleBarcodeScanned({ type: 'manual', data: '899999900001' });
+              }}
+            >
+              <Text style={styles.sampleChipText}>Bimoli (899999900001)</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.sampleChip}
+              onPress={() => {
+                setManualBarcode('089686010018');
+                handleBarcodeScanned({ type: 'manual', data: '089686010018' });
+              }}
+            >
+              <Text style={styles.sampleChipText}>Indomie (089686010018)</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  if (!permission) {
+    return <View style={styles.container} />;
+  }
+
+  if (!permission.granted) {
+    return (
+      <View style={styles.permissionContainer}>
+        <Text style={styles.permissionTitle}>Akses Kamera Diperlukan</Text>
+        <Text style={styles.permissionSub}>
+          LabaNotera membutuhkan izin kamera untuk memindai kode batang (barcode) produk warung.
+        </Text>
+        <TouchableOpacity style={styles.permissionBtn} onPress={requestPermission}>
+          <Text style={styles.permissionBtnText}>Izinkan Kamera</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -226,5 +289,79 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: 'bold',
+  },
+  webContainer: {
+    flex: 1,
+    backgroundColor: Colors.primaryDark,
+  },
+  webBox: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    margin: 20,
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  webTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: Colors.text,
+    marginBottom: 6,
+  },
+  webSub: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  manualRow: {
+    flexDirection: 'row',
+    width: '100%',
+    maxWidth: 420,
+    gap: 8,
+    marginBottom: 20,
+  },
+  webInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 44,
+    fontSize: 14,
+  },
+  webSubmitBtn: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  webSubmitBtnText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+  },
+  sampleTitle: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginBottom: 8,
+  },
+  samplesRow: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  sampleChip: {
+    backgroundColor: Colors.primaryLight,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  sampleChipText: {
+    color: Colors.primaryDark,
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

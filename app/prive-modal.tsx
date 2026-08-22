@@ -9,7 +9,7 @@ import {
   Alert,
   SafeAreaView,
 } from 'react-native';
-import { useSQLiteContext } from 'expo-sqlite';
+import { useAppSQLiteContext as useSQLiteContext } from '../src/db/AppDatabaseProvider';
 import { useRouter } from 'expo-router';
 import { PriveExpense, ExpenseType } from '../src/types';
 import {

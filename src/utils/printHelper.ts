@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { Transaction, TransactionItem } from '../types';
@@ -121,6 +122,10 @@ export async function printReceipt(transaction: Transaction, items: TransactionI
 
 export async function shareReceiptPdf(transaction: Transaction, items: TransactionItem[]) {
   const html = generateReceiptHtml(transaction, items);
+  if (Platform.OS === 'web') {
+    await Print.printAsync({ html });
+    return;
+  }
   const { uri } = await Print.printToFileAsync({ html });
   if (await Sharing.isAvailableAsync()) {
     await Sharing.shareAsync(uri, {
@@ -128,5 +133,7 @@ export async function shareReceiptPdf(transaction: Transaction, items: Transacti
       dialogTitle: `Struk_${transaction.transaction_code}`,
       UTI: 'com.adobe.pdf',
     });
+  } else {
+    await Print.printAsync({ html });
   }
 }

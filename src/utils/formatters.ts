@@ -1,8 +1,23 @@
-export function formatRupiah(amount: number): string {
-  if (isNaN(amount)) return 'Rp 0';
-  return 'Rp ' + Math.round(amount).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+import { replace } from "expo-router/build/global-state/routing";
+
+export function formatRupiah(value: number | string): string {
+  if (value === undefined || value === null || value === '') return '';
+  
+  // Ambil angkanya saja (bersihkan karakter selain 0-9)
+  const cleaned = String(value).replace(/[^0-9]/g, '');
+  if (!cleaned) return '';
+
+  const num = parseInt(cleaned, 10);
+  if (isNaN(num)) return 'Rp 0';
+
+  return 'Rp ' + num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }
 
+export function parseRupiahToNumber(formattedText: string): number {
+  if (!formattedText) return 0;
+  const cleaned = formattedText.replace(/[^0-9]/g, '');
+  return cleaned ? parseInt(cleaned, 10) : 0;
+}
 export function formatTanggal(dateStr?: string | Date): string {
   if (!dateStr) return '';
   const date = typeof dateStr === 'string' ? new Date(dateStr) : dateStr;
@@ -29,4 +44,39 @@ export function generateDebtWaMessage(customerName: string, remainingDebt: numbe
   return `Halo Kak ${customerName}, salam hangat dari ${warungName} 👋.\n\n` +
     `Mengingatkan mengenai catatan kasbon/utang belanja sebesar *${formatRupiah(remainingDebt)}*.\n\n` +
     `Pembayaran dapat dilakukan tunai atau via QRIS. Terima kasih banyak atas kerjasamanya! 🙏`;
+}
+
+export function getProductCategory(product: { name: string; category?: string | null }): 'SNACK' | 'MINUMAN' | 'BARANG_POKOK' {
+  if (product.category === 'SNACK' || product.category === 'MINUMAN' || product.category === 'BARANG_POKOK') {
+    return product.category;
+  }
+  const nameLower = product.name.toLowerCase();
+  if (
+    nameLower.includes('kopi') ||
+    nameLower.includes('teh') ||
+    nameLower.includes('air') ||
+    nameLower.includes('minuman') ||
+    nameLower.includes('jus') ||
+    nameLower.includes('susu') ||
+    nameLower.includes('aqua') ||
+    nameLower.includes('pucuk')
+  ) {
+    return 'MINUMAN';
+  }
+  if (
+    nameLower.includes('gorengan') ||
+    nameLower.includes('kue') ||
+    nameLower.includes('kerupuk') ||
+    nameLower.includes('snack') ||
+    nameLower.includes('chitato') ||
+    nameLower.includes('wafer') ||
+    nameLower.includes('biskuat') ||
+    nameLower.includes('roti') ||
+    nameLower.includes('kripik') ||
+    nameLower.includes('ciki') ||
+    nameLower.includes('jajanan')
+  ) {
+    return 'SNACK';
+  }
+  return 'BARANG_POKOK';
 }
