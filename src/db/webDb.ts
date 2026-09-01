@@ -9,6 +9,19 @@ class WebSQLiteDatabase {
     debts: [],
     debt_payments: [],
     prive_expenses: [],
+    shop_profile: [
+      {
+        id: 1,
+        shop_name: 'Warung LabaNotera',
+        owner_name: '',
+        phone: '',
+        address: '',
+        bank_name: 'BCA',
+        bank_account_number: '',
+        bank_account_holder: '',
+        qris_image_uri: null,
+      },
+    ],
   };
   private autoIds: Record<string, number> = {
     products: 1,
@@ -17,6 +30,7 @@ class WebSQLiteDatabase {
     debts: 1,
     debt_payments: 1,
     prive_expenses: 1,
+    shop_profile: 2,
   };
 
   constructor() {
@@ -31,6 +45,21 @@ class WebSQLiteDatabase {
           const parsed = JSON.parse(saved);
           this.data = parsed.data || this.data;
           this.autoIds = parsed.autoIds || this.autoIds;
+          if (!this.data.shop_profile || this.data.shop_profile.length === 0) {
+            this.data.shop_profile = [
+              {
+                id: 1,
+                shop_name: 'Warung LabaNotera',
+                owner_name: '',
+                phone: '',
+                address: '',
+                bank_name: 'BCA',
+                bank_account_number: '',
+                bank_account_holder: '',
+                qris_image_uri: null,
+              },
+            ];
+          }
         }
       }
     } catch (e) {
@@ -193,12 +222,18 @@ class WebSQLiteDatabase {
             changes++;
           }
         });
-      } else if (upper.includes('SET REMAINING_DEBT = ?, STATUS = ? WHERE ID = ?')) {
-        const [remaining_debt, status, id] = params;
+      } else if (upper.includes('SET SHOP_NAME = ?')) {
+        const [shop_name, owner_name, phone, address, bank_name, bank_account_number, bank_account_holder, qris_image_uri, id] = params;
         items.forEach((item) => {
-          if (item.id === id) {
-            item.remaining_debt = remaining_debt;
-            item.status = status;
+          if (item.id === id || items.length === 1) {
+            item.shop_name = shop_name;
+            item.owner_name = owner_name;
+            item.phone = phone;
+            item.address = address;
+            item.bank_name = bank_name;
+            item.bank_account_number = bank_account_number;
+            item.bank_account_holder = bank_account_holder;
+            item.qris_image_uri = qris_image_uri;
             changes++;
           }
         });

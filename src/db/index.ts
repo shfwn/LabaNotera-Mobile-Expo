@@ -69,7 +69,29 @@ export async function initDatabase(db: SQLiteDatabase) {
         note TEXT NOT NULL,
         date TEXT DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS shop_profile (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        shop_name TEXT NOT NULL DEFAULT 'Warung LabaNotera',
+        owner_name TEXT,
+        phone TEXT,
+        address TEXT,
+        bank_name TEXT,
+        bank_account_number TEXT,
+        bank_account_holder TEXT,
+        qris_image_uri TEXT,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
     `);
+
+    // Check if shop_profile exists; if not, populate default profile
+    const profileCount = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM shop_profile');
+    if (profileCount && profileCount.count === 0) {
+      await db.execAsync(`
+        INSERT INTO shop_profile (shop_name, bank_name, bank_account_number, bank_account_holder) VALUES
+        ('Warung LabaNotera', 'BCA', '', '');
+      `);
+    }
 
     // Check if products exist; if not, populate sample products
     const result = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM products');

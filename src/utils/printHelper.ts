@@ -115,13 +115,21 @@ export function generateReceiptHtml(
   `;
 }
 
-export async function printReceipt(transaction: Transaction, items: TransactionItem[]) {
-  const html = generateReceiptHtml(transaction, items);
+export async function printReceipt(
+  transaction: Transaction,
+  items: TransactionItem[],
+  storeName?: string
+) {
+  const html = generateReceiptHtml(transaction, items, storeName);
   await Print.printAsync({ html });
 }
 
-export async function shareReceiptPdf(transaction: Transaction, items: TransactionItem[]) {
-  const html = generateReceiptHtml(transaction, items);
+export async function shareReceiptPdf(
+  transaction: Transaction,
+  items: TransactionItem[],
+  storeName?: string
+) {
+  const html = generateReceiptHtml(transaction, items, storeName);
   if (Platform.OS === 'web') {
     await Print.printAsync({ html });
     return;

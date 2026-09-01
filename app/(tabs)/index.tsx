@@ -9,9 +9,11 @@ import {
 } from 'react-native';
 import { useAppSQLiteContext as useSQLiteContext } from '../../src/db/AppDatabaseProvider';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { FinancialReportSummary, Transaction } from '../../src/types';
+import { FinancialReportSummary, Transaction, ShopProfile } from '../../src/types';
 import { getFinancialSummary } from '../../src/services/reportService';
 import { getRecentTransactions } from '../../src/services/posService';
+import { getShopProfile } from '../../src/services/profileService';
+import ProfileModal from '../../src/components/ProfileModal';
 import { formatRupiah, formatTanggal } from '../../src/utils/formatters';
 import { getShadowStyle } from '../../src/utils/styleHelper';
 import { Colors } from '../../src/constants/theme';
@@ -23,6 +25,8 @@ export default function DashboardScreen() {
 
   const [summary, setSummary] = useState<FinancialReportSummary | null>(null);
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
+  const [profile, setProfile] = useState<ShopProfile | null>(null);
+  const [isProfileModalVisible, setIsProfileModalVisible] = useState(false);
 
   const loadDashboardData = useCallback(async () => {
     try {
@@ -31,6 +35,9 @@ export default function DashboardScreen() {
 
       const trxs = await getRecentTransactions(db, 5);
       setRecentTransactions(trxs);
+
+      const profileData = await getShopProfile(db);
+      setProfile(profileData);
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
     }
@@ -47,8 +54,28 @@ export default function DashboardScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Top Financial Metrics Dashboard Section */}
         <View style={styles.dashboardHero}>
-          <Text style={styles.dashboardTitle}>Ringkasan Keuangan</Text>
-          <Text style={styles.metricLabel}></Text>
+          {/* Header with Store Name & Profile Button on Top Right */}
+          <View style={styles.dashboardHeaderRow}>
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <View style={styles.shopNameRow}>
+                <Ionicons name="storefront-outline" color="#5EEAD4" size={18} />
+                <Text style={styles.dashboardTitle} numberOfLines={1}>
+                  {profile?.shop_name || 'Warung LabaNotera'}
+                </Text>
+              </View>
+              <Text style={styles.dashboardSub}>Ringkasan Keuangan & Usaha Warung</Text>
+            </View>
+
+            {/* Profile Button on Top Right */}
+            <TouchableOpacity
+              style={styles.profileHeaderBtn}
+              onPress={() => setIsProfileModalVisible(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="person-circle-outline" color="#FFFFFF" size={18} />
+              <Text style={styles.profileHeaderBtnText}>Profil</Text>
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.metricsContainer}>
             {/* Row 1 */}
@@ -111,70 +138,80 @@ export default function DashboardScreen() {
         <View style={styles.shortcutsSection}>
           <Text style={styles.sectionHeaderTitle}>Fitur Utama</Text>
 
-          <View style={styles.shortcutsGrid}>
-            {/* Shortcut 1: Kasir */}
-            <TouchableOpacity
-              style={styles.shortcutCard}
-              onPress={() => router.push('/(tabs)/pos')}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.shortcutIconBg, { backgroundColor: Colors.primary }]}>
-                <Ionicons name="cart-outline" color="#FFFFFF" size={28} />
-              </View>
-              <View style={styles.shortcutTextCol}>
-                <Text style={styles.shortcutName}>Kasir Warung</Text>
-                <Text style={styles.shortcutDesc}>Transaksi penjualan</Text>
-              </View>
-              <Ionicons name="chevron-forward" color={Colors.textMuted} size={18} />
-            </TouchableOpacity>
+          <View style={styles.shortcutsContainer}>
+            {/* Row 1 */}
+            <View style={styles.shortcutsRow}>
+              {/* Shortcut 1: Kasir */}
+              <TouchableOpacity
+                style={styles.shortcutCard}
+                onPress={() => router.push('/(tabs)/pos')}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.shortcutIconBg, { backgroundColor: Colors.primary }]}>
+                  <Ionicons name="cart-outline" color="#FFFFFF" size={26} />
+                </View>
+                <Text style={styles.shortcutName} numberOfLines={1}>
+                  Kasir Warung
+                </Text>
+                <Text style={styles.shortcutDesc} numberOfLines={1}>
+                  Transaksi Penjualan
+                </Text>
+              </TouchableOpacity>
 
-            {/* Shortcut 2: Stok & Titipan */}
-            <TouchableOpacity
-              style={styles.shortcutCard}
-              onPress={() => router.push('/(tabs)/stock')}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.shortcutIconBg, { backgroundColor: Colors.primaryDark }]}>
-                <Ionicons name="cube-outline" color="#FFFFFF" size={26} />
-              </View>
-              <View style={styles.shortcutTextCol}>
-                <Text style={styles.shortcutName}>Stok Warung</Text>
-                <Text style={styles.shortcutDesc}>Stok & Persediaan</Text>
-              </View>
-              <Ionicons name="chevron-forward" color={Colors.textMuted} size={18} />
-            </TouchableOpacity>
+              {/* Shortcut 2: Stok & Titipan */}
+              <TouchableOpacity
+                style={styles.shortcutCard}
+                onPress={() => router.push('/(tabs)/stock')}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.shortcutIconBg, { backgroundColor: Colors.primaryDark }]}>
+                  <Ionicons name="cube-outline" color="#FFFFFF" size={26} />
+                </View>
+                <Text style={styles.shortcutName} numberOfLines={1}>
+                  Stok Warung
+                </Text>
+                <Text style={styles.shortcutDesc} numberOfLines={1}>
+                  Stok & Persediaan
+                </Text>
+              </TouchableOpacity>
+            </View>
 
-            {/* Shortcut 3: Buku Utang */}
-            <TouchableOpacity
-              style={styles.shortcutCard}
-              onPress={() => router.push('/(tabs)/debt')}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.shortcutIconBg, { backgroundColor: Colors.secondary }]}>
-                <Ionicons name="book-outline" color="#FFFFFF" size={26} />
-              </View>
-              <View style={styles.shortcutTextCol}>
-                <Text style={styles.shortcutName}>Buku Utang</Text>
-                <Text style={styles.shortcutDesc}>Catat utang & kasbon</Text>
-              </View>
-              <Ionicons name="chevron-forward" color={Colors.textMuted} size={18} />
-            </TouchableOpacity>
+            {/* Row 2 */}
+            <View style={styles.shortcutsRow}>
+              {/* Shortcut 3: Buku Utang */}
+              <TouchableOpacity
+                style={styles.shortcutCard}
+                onPress={() => router.push('/(tabs)/debt')}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.shortcutIconBg, { backgroundColor: Colors.secondary }]}>
+                  <Ionicons name="book-outline" color="#FFFFFF" size={26} />
+                </View>
+                <Text style={styles.shortcutName} numberOfLines={1}>
+                  Buku Utang
+                </Text>
+                <Text style={styles.shortcutDesc} numberOfLines={1}>
+                  Catat utang & kasbon
+                </Text>
+              </TouchableOpacity>
 
-            {/* Shortcut 4: Laporan */}
-            <TouchableOpacity
-              style={styles.shortcutCard}
-              onPress={() => router.push('/(tabs)/report')}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.shortcutIconBg, { backgroundColor: Colors.accent }]}>
-                <Ionicons name="stats-chart-outline" color="#FFFFFF" size={26} />
-              </View>
-              <View style={styles.shortcutTextCol}>
-                <Text style={styles.shortcutName}>Riwayat Transaksi</Text>
-                <Text style={styles.shortcutDesc}>Rekam transaksi & struk</Text>
-              </View>
-              <Ionicons name="chevron-forward" color={Colors.textMuted} size={18} />
-            </TouchableOpacity>
+              {/* Shortcut 4: Laporan */}
+              <TouchableOpacity
+                style={styles.shortcutCard}
+                onPress={() => router.push('/(tabs)/report')}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.shortcutIconBg, { backgroundColor: Colors.accent }]}>
+                  <Ionicons name="stats-chart-outline" color="#FFFFFF" size={26} />
+                </View>
+                <Text style={styles.shortcutName} numberOfLines={1}>
+                  Riwayat Transaksi
+                </Text>
+                <Text style={styles.shortcutDesc} numberOfLines={1}>
+                  Rekam transaksi & struk
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
@@ -215,6 +252,13 @@ export default function DashboardScreen() {
           )}
         </View>
       </ScrollView>
+
+      {/* Warung Profile & Settings Modal */}
+      <ProfileModal
+        visible={isProfileModalVisible}
+        onClose={() => setIsProfileModalVisible(false)}
+        onProfileUpdated={(updated) => setProfile(updated)}
+      />
     </SafeAreaView>
   );
 }
@@ -233,16 +277,43 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
   },
+  dashboardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  shopNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   dashboardTitle: {
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: 'bold',
+    flexShrink: 1,
   },
   dashboardSub: {
-    color: '#E2E8F0',
-    fontSize: 12,
+    color: '#CCFBF1',
+    fontSize: 11,
     marginTop: 2,
-    marginBottom: 14,
+  },
+  profileHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    gap: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  profileHeaderBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   metricsContainer: {
     gap: 10,
@@ -289,39 +360,43 @@ const styles = StyleSheet.create({
     color: Colors.text,
     marginBottom: 10,
   },
-  shortcutsGrid: {
+  shortcutsContainer: {
+    gap: 10,
+  },
+  shortcutsRow: {
+    flexDirection: 'row',
     gap: 10,
   },
   shortcutCard: {
-    flexDirection: 'row',
+    flex: 1,
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
     borderWidth: 1,
     borderColor: Colors.border,
     ...getShadowStyle(1),
   },
   shortcutIconBg: {
-    width: 46,
-    height: 46,
-    borderRadius: 10,
+    width: 48,
+    height: 48,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
-  },
-  shortcutTextCol: {
-    flex: 1,
+    marginBottom: 8,
   },
   shortcutName: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: 'bold',
     color: Colors.text,
+    textAlign: 'center',
+    marginBottom: 2,
   },
   shortcutDesc: {
-    fontSize: 11,
+    fontSize: 10,
     color: Colors.textMuted,
-    marginTop: 2,
+    textAlign: 'center',
   },
   recentSection: {
     paddingHorizontal: 14,

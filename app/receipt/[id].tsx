@@ -11,8 +11,9 @@ import {
 } from 'react-native';
 import { useAppSQLiteContext as useSQLiteContext } from '../../src/db/AppDatabaseProvider';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Transaction, TransactionItem } from '../../src/types';
+import { Transaction, TransactionItem, ShopProfile } from '../../src/types';
 import { getTransactionDetails } from '../../src/services/posService';
+import { getShopProfile } from '../../src/services/profileService';
 import { printReceipt, shareReceiptPdf } from '../../src/utils/printHelper';
 import { formatRupiah, formatTanggal } from '../../src/utils/formatters';
 import { getShadowStyle } from '../../src/utils/styleHelper';
@@ -26,6 +27,7 @@ export default function ReceiptScreen() {
 
   const [transaction, setTransaction] = useState<Transaction | null>(null);
   const [items, setItems] = useState<TransactionItem[]>([]);
+  const [shopProfile, setShopProfile] = useState<ShopProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadReceipt = useCallback(async () => {
@@ -36,6 +38,8 @@ export default function ReceiptScreen() {
         setTransaction(data.transaction);
         setItems(data.items);
       }
+      const profile = await getShopProfile(db);
+      setShopProfile(profile);
     } catch (err) {
       console.error('Failed to load transaction details:', err);
     } finally {
@@ -50,7 +54,7 @@ export default function ReceiptScreen() {
   const handlePrint = async () => {
     if (!transaction) return;
     try {
-      await printReceipt(transaction, items);
+      await printReceipt(transaction, items, shopProfile?.shop_name);
     } catch (err: any) {
       Alert.alert('Gagal Cetak', err.message || 'Terjadi kesalahan saat mencetak.');
     }
@@ -59,7 +63,7 @@ export default function ReceiptScreen() {
   const handleSharePdf = async () => {
     if (!transaction) return;
     try {
-      await shareReceiptPdf(transaction, items);
+      await shareReceiptPdf(transaction, items, shopProfile?.shop_name);
     } catch (err: any) {
       Alert.alert('Gagal Bagikan Struk', err.message || 'Terjadi kesalahan saat membagikan PDF.');
     }
@@ -85,6 +89,8 @@ export default function ReceiptScreen() {
     );
   }
 
+  const displayName = shopProfile?.shop_name?.toUpperCase() || 'WARUNG LABANOTERA';
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -99,7 +105,7 @@ export default function ReceiptScreen() {
         <View style={styles.receiptPaper}>
           <View style={styles.receiptHeader}>
             <Ionicons name="storefront-outline" color={Colors.primaryDark} size={28} />
-            <Text style={styles.storeTitle}>WARUNG LABANOTERA</Text>
+            <Text style={styles.storeTitle}>{displayName}</Text>
             <Text style={styles.metaText}>Nota Pembayaran Kasir POS</Text>
             <Text style={styles.metaText}>No: {transaction.transaction_code}</Text>
             <Text style={styles.metaText}>Tgl: {formatTanggal(transaction.created_at)}</Text>

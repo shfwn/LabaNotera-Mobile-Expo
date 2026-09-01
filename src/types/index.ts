@@ -82,3 +82,17 @@ export interface FinancialReportSummary {
   totalConsignmentOwed: number;
   transactionCount: number;
 }
+
+export interface ShopProfile {
+  id?: number;
+  shop_name: string;
+  owner_name?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  bank_name?: string | null;
+  bank_account_number?: string | null;
+  bank_account_holder?: string | null;
+  qris_image_uri?: string | null;
+  updated_at?: string;
+}
+

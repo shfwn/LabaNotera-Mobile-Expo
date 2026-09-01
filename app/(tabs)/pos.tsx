@@ -10,12 +10,15 @@ import {
   Alert,
   ScrollView,
   SafeAreaView,
+  Image,
 } from 'react-native';
 import { useAppSQLiteContext as useSQLiteContext } from '../../src/db/AppDatabaseProvider';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { Product, CartItem, PaymentMethod } from '../../src/types';
+import { Product, CartItem, PaymentMethod, ShopProfile } from '../../src/types';
 import { getProducts, searchProducts } from '../../src/services/productService';
 import { processCheckout } from '../../src/services/posService';
+import { getShopProfile } from '../../src/services/profileService';
+import ProfileModal from '../../src/components/ProfileModal';
 import { formatRupiah, parseRupiahToNumber, getProductCategory } from '../../src/utils/formatters';
 import { getShadowStyle } from '../../src/utils/styleHelper';
 import { Colors } from '../../src/constants/theme';
@@ -36,6 +39,10 @@ export default function PosScreen() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCheckoutModalVisible, setIsCheckoutModalVisible] = useState(false);
 
+  // Shop Profile state (QRIS and Bank Account)
+  const [shopProfile, setShopProfile] = useState<ShopProfile | null>(null);
+  const [isProfileModalVisible, setIsProfileModalVisible] = useState(false);
+
   // Checkout payment state
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
   const [cashAmountInput, setCashAmountInput] = useState('');
@@ -49,6 +56,9 @@ export default function PosScreen() {
         ? await searchProducts(db, searchQuery)
         : await getProducts(db);
       setProducts(data);
+
+      const profile = await getShopProfile(db);
+      setShopProfile(profile);
     } catch (err) {
       console.error('Failed to load products in POS:', err);
     }
@@ -521,6 +531,64 @@ export default function PosScreen() {
                 </View>
               ) : null}
 
+              {/* QRIS & Transfer Bank Details Section */}
+              {paymentMethod === 'QRIS' ? (
+                <View style={styles.qrisSectionContainer}>
+                  <View style={styles.qrisSectionHeader}>
+                    <Text style={styles.inputLabel}>Pembayaran QRIS & Transfer Bank</Text>
+                    <TouchableOpacity onPress={() => setIsProfileModalVisible(true)}>
+                      <Text style={styles.editProfileLinkText}>Ubah di Profil &gt;</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* QRIS Image if configured */}
+                  {shopProfile?.qris_image_uri ? (
+                    <View style={styles.qrisImageCard}>
+                      <Image
+                        source={{ uri: shopProfile.qris_image_uri }}
+                        style={styles.qrisDisplayImage}
+                        resizeMode="contain"
+                      />
+                      <Text style={styles.qrisScanHint}>Scan barcode QRIS di atas untuk membayar</Text>
+                    </View>
+                  ) : null}
+
+                  {/* Bank Account Transfer Details if configured */}
+                  {shopProfile?.bank_account_number ? (
+                    <View style={styles.bankAccountCard}>
+                      <View style={styles.bankAccountHeader}>
+                        <View style={styles.bankBadge}>
+                          <Text style={styles.bankBadgeText}>{shopProfile.bank_name || 'BANK'}</Text>
+                        </View>
+                        <Text style={styles.bankTransferLabel}>Transfer Rekening</Text>
+                      </View>
+                      <Text style={styles.bankAccountNumber}>{shopProfile.bank_account_number}</Text>
+                      {shopProfile.bank_account_holder ? (
+                        <Text style={styles.bankAccountHolder}>a.n. {shopProfile.bank_account_holder}</Text>
+                      ) : null}
+                    </View>
+                  ) : null}
+
+                  {/* If neither QRIS nor Bank is set up */}
+                  {!shopProfile?.qris_image_uri && !shopProfile?.bank_account_number ? (
+                    <View style={styles.qrisEmptyBox}>
+                      <Ionicons name="qr-code-outline" color={Colors.textMuted} size={32} />
+                      <Text style={styles.qrisEmptyTitle}>QRIS & Rekening Belum Diisi</Text>
+                      <Text style={styles.qrisEmptySub}>
+                        Upload foto barcode QRIS atau isi nomor rekening di Profil Warung agar tampil otomatis di sini.
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.qrisSetupBtn}
+                        onPress={() => setIsProfileModalVisible(true)}
+                      >
+                        <Ionicons name="settings-outline" color="#FFFFFF" size={16} />
+                        <Text style={styles.qrisSetupBtnText}>Atur Profil Pembayaran</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+
               {/* Customer Name Form — shown when UTANG or when cash is short */}
               {isCustomerNameRequired ? (
                 <View style={styles.utangFormContainer}>
@@ -576,6 +644,13 @@ export default function PosScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Warung Profile Modal */}
+      <ProfileModal
+        visible={isProfileModalVisible}
+        onClose={() => setIsProfileModalVisible(false)}
+        onProfileUpdated={(updated) => setShopProfile(updated)}
+      />
     </SafeAreaView>
   );
 }
@@ -1094,5 +1169,117 @@ const styles = StyleSheet.create({
   inputHighlightBorder: {
     borderColor: Colors.warning,
     borderWidth: 1.5,
+  },
+  qrisSectionContainer: {
+    marginBottom: 14,
+  },
+  qrisSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  editProfileLinkText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: Colors.primary,
+  },
+  qrisImageCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: 10,
+  },
+  qrisDisplayImage: {
+    width: 220,
+    height: 220,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+  },
+  qrisScanHint: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  bankAccountCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: 8,
+  },
+  bankAccountHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  bankBadge: {
+    backgroundColor: Colors.primaryDark,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  bankBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  bankTransferLabel: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontWeight: '600',
+  },
+  bankAccountNumber: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: Colors.text,
+    letterSpacing: 1,
+  },
+  bankAccountHolder: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  qrisEmptyBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  qrisEmptyTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: Colors.text,
+    marginTop: 8,
+  },
+  qrisEmptySub: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 12,
+    lineHeight: 16,
+  },
+  qrisSetupBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  qrisSetupBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 });
