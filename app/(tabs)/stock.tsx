@@ -25,6 +25,7 @@ import {
   updateProductStock,
 } from '../../src/services/productService';
 import { formatRupiah } from '../../src/utils/formatters';
+import { showAppAlert } from '../../src/utils/alertHelper';
 import { Colors } from '../../src/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -116,7 +117,7 @@ export default function StockScreen() {
 
   const handleSaveProduct = async () => {
     if (!name.trim()) {
-      Alert.alert('Nama Barang Wajib', 'Mohon masukkan nama produk/barang.');
+      showAppAlert('Nama Barang Wajib', 'Mohon masukkan nama produk/barang.');
       return;
     }
 
@@ -125,7 +126,7 @@ export default function StockScreen() {
     const stockNum = parseInt(stock, 10) || 0;
 
     if (sellPriceNum <= 0) {
-      Alert.alert('Harga Jual Harus Valid', 'Harga jual harus lebih dari 0.');
+      showAppAlert('Harga Jual Harus Valid', 'Harga jual harus lebih dari 0.');
       return;
     }
 
@@ -142,7 +143,7 @@ export default function StockScreen() {
           supplier_name: isConsignment ? supplierName.trim() || null : null,
           category,
         });
-        Alert.alert('Berhasil', 'Data produk berhasil diperbarui.');
+        showAppAlert('Berhasil', 'Data produk berhasil diperbarui.');
       } else {
         await addProduct(db, {
           barcode: barcode.trim() || null,
@@ -154,18 +155,18 @@ export default function StockScreen() {
           supplier_name: isConsignment ? supplierName.trim() || null : null,
           category,
         });
-        Alert.alert('Berhasil', 'Produk baru berhasil ditambahkan.');
+        showAppAlert('Berhasil', 'Produk baru berhasil ditambahkan.');
       }
 
       setIsModalVisible(false);
       loadProducts();
     } catch (err: any) {
-      Alert.alert('Gagal Menyimpan', err.message || 'Terjadi kesalahan saat menyimpan produk.');
+      showAppAlert('Gagal Menyimpan', err.message || 'Terjadi kesalahan saat menyimpan produk.');
     }
   };
 
   const handleDelete = (product: Product) => {
-    Alert.alert(
+    showAppAlert(
       'Hapus Produk',
       `Apakah Anda yakin ingin menghapus "${product.name}"?`,
       [

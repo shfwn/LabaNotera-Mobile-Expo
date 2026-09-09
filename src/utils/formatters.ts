@@ -46,6 +46,21 @@ export function generateDebtWaMessage(customerName: string, remainingDebt: numbe
     `Pembayaran dapat dilakukan tunai atau via QRIS. Terima kasih banyak atas kerjasamanya! 🙏`;
 }
 
+export function getTransactionReceivedAmount(trx: {
+  payment_method: string;
+  total_amount: number;
+  cash_paid?: number | null;
+  debt_amount?: number | null;
+}): number {
+  if (trx.payment_method === 'UTANG') {
+    return trx.cash_paid || 0;
+  }
+  if (trx.payment_method === 'CASH+UTANG') {
+    return trx.cash_paid || 0;
+  }
+  return trx.total_amount;
+}
+
 export function getProductCategory(product: { name: string; category?: string | null }): 'SNACK' | 'MINUMAN' | 'BARANG_POKOK' {
   if (product.category === 'SNACK' || product.category === 'MINUMAN' || product.category === 'BARANG_POKOK') {
     return product.category;

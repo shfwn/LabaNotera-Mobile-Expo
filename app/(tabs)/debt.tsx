@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,7 +7,6 @@ import {
   FlatList,
   TextInput,
   Modal,
-  Alert,
   ScrollView,
   Linking,
   SafeAreaView,
@@ -22,8 +21,15 @@ import {
   payDebt,
   getDebtPayments,
   deleteDebt,
+  deleteDebtPayment,
 } from '../../src/services/debtService';
-import { formatRupiah, formatTanggal, generateDebtWaMessage } from '../../src/utils/formatters';
+import {
+  formatRupiah,
+  formatTanggal,
+  generateDebtWaMessage,
+  parseRupiahToNumber,
+} from '../../src/utils/formatters';
+import { showAppAlert } from '../../src/utils/alertHelper';
 import { Colors } from '../../src/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -32,6 +38,7 @@ export default function DebtScreen() {
 
   const [debts, setDebts] = useState<Debt[]>([]);
   const [activeTabFilter, setActiveTabFilter] = useState<'UNPAID' | 'PAID' | 'ALL'>('UNPAID');
+  const [searchQuery, setSearchQuery] = useState('');
 
   // New Debt Modal
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
@@ -66,12 +73,12 @@ export default function DebtScreen() {
 
   const handleAddDebt = async () => {
     if (!newCustomerName.trim()) {
-      Alert.alert('Nama Pelanggan Wajib', 'Mohon isi nama pelanggan utang.');
+      showAppAlert('Nama Pelanggan Wajib', 'Mohon isi nama pelanggan utang.');
       return;
     }
-    const amount = parseFloat(newTotalDebt) || 0;
+    const amount = parseRupiahToNumber(newTotalDebt);
     if (amount <= 0) {
-      Alert.alert('Jumlah Utang Wajib', 'Mohon masukkan jumlah utang yang valid.');
+      showAppAlert('Jumlah Utang Wajib', 'Mohon masukkan jumlah utang yang valid.');
       return;
     }
 
@@ -81,18 +88,18 @@ export default function DebtScreen() {
       setNewCustomerName('');
       setNewPhone('');
       setNewTotalDebt('');
-      loadDebts();
-      Alert.alert('Berhasil', 'Catatan utang baru berhasil ditambahkan.');
+      await loadDebts();
+      showAppAlert('Berhasil', 'Catatan utang baru berhasil ditambahkan.');
     } catch (err: any) {
-      Alert.alert('Gagal', err.message || 'Gagal menambahkan utang.');
+      showAppAlert('Gagal', err.message || 'Gagal menambahkan utang.');
     }
   };
 
   const handlePayDebtSubmit = async () => {
     if (!selectedDebt) return;
-    const amount = parseFloat(payAmount) || 0;
+    const amount = parseRupiahToNumber(payAmount);
     if (amount <= 0) {
-      Alert.alert('Nominal Pembayaran', 'Masukkan nominal pembayaran cicilan/pelunasan.');
+      showAppAlert('Nominal Pembayaran', 'Masukkan nominal pembayaran cicilan/pelunasan.');
       return;
     }
 
@@ -101,18 +108,50 @@ export default function DebtScreen() {
       setIsPayModalVisible(false);
       setPayAmount('');
       setPayNotes('');
-      loadDebts();
-      Alert.alert('Pembayaran Dicatat', 'Pembayaran utang telah berhasil diperbarui.');
+      await loadDebts();
+      showAppAlert('Pembayaran Dicatat', `Pembayaran ${formatRupiah(amount)} berhasil disimpan.`);
     } catch (err: any) {
-      Alert.alert('Gagal', err.message || 'Terjadi kesalahan saat memproses pembayaran.');
+      showAppAlert('Gagal', err.message || 'Terjadi kesalahan saat memproses pembayaran.');
     }
   };
 
   const openPaymentHistory = async (debt: Debt) => {
-    setSelectedDebt(debt);
-    const history = await getDebtPayments(db, debt.id);
-    setPaymentHistory(history);
-    setIsHistoryModalVisible(true);
+    try {
+      const freshDebt = (await db.getFirstAsync<Debt>(`SELECT * FROM debts WHERE id = ?`, [debt.id])) || debt;
+      setSelectedDebt(freshDebt);
+      const history = await getDebtPayments(db, debt.id);
+      setPaymentHistory(history);
+      setIsHistoryModalVisible(true);
+    } catch (err) {
+      console.error('Failed to load payment history:', err);
+    }
+  };
+
+  const handleDeletePaymentItem = (paymentItem: DebtPayment) => {
+    if (!selectedDebt) return;
+    showAppAlert(
+      'Hapus Riwayat Cicilan',
+      `Hapus pembayaran ${formatRupiah(paymentItem.amount_paid)}? Sisa utang pelanggan akan disesuaikan kembali.`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Hapus',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteDebtPayment(db, paymentItem.id, selectedDebt.id);
+              await loadDebts();
+              const freshDebt = await db.getFirstAsync<Debt>(`SELECT * FROM debts WHERE id = ?`, [selectedDebt.id]);
+              if (freshDebt) setSelectedDebt(freshDebt);
+              const history = await getDebtPayments(db, selectedDebt.id);
+              setPaymentHistory(history);
+            } catch (err) {
+              console.error('Failed to delete payment item:', err);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleSendWaReminder = (debt: Debt) => {
@@ -128,79 +167,133 @@ export default function DebtScreen() {
       : `https://api.whatsapp.com/send?text=${encodedMessage}`;
 
     Linking.openURL(waUrl).catch(() => {
-      Alert.alert('WhatsApp Tidak Terpasang', 'Aplikasi WhatsApp tidak ditemukan di HP Anda.');
+      showAppAlert('WhatsApp Tidak Terpasang', 'Aplikasi WhatsApp tidak ditemukan di HP Anda.');
     });
   };
 
   const handleDeleteDebt = (debt: Debt) => {
-    Alert.alert(
-      'Hapus Utang',
-      `Apakah Anda yakin ingin menghapus catatan utang "${debt.customer_name}"?`,
+    showAppAlert(
+      'Hapus Catatan Utang',
+      `Apakah Anda yakin ingin menghapus catatan utang "${debt.customer_name}"? Semua riwayat pembayaran terkait juga akan terhapus.`,
       [
         { text: 'Batal', style: 'cancel' },
         {
           text: 'Hapus',
           style: 'destructive',
           onPress: async () => {
-            await deleteDebt(db, debt.id);
-            loadDebts();
+            try {
+              await deleteDebt(db, debt.id);
+              await loadDebts();
+              if (selectedDebt?.id === debt.id) {
+                setIsHistoryModalVisible(false);
+                setIsPayModalVisible(false);
+                setSelectedDebt(null);
+              }
+              showAppAlert('Berhasil', 'Catatan utang telah dihapus.');
+            } catch (err) {
+              console.error('Failed to delete debt:', err);
+              showAppAlert('Gagal', 'Terjadi kesalahan saat menghapus catatan utang.');
+            }
           },
         },
       ]
     );
   };
 
-  const totalOutstanding = debts.reduce((sum, d) => sum + d.remaining_debt, 0);
+  const totalOutstanding = debts.reduce((sum, d) => sum + (d.remaining_debt || 0), 0);
+  const unpaidCount = debts.filter((d) => (d.remaining_debt || 0) > 0).length;
+  const paidCount = debts.filter((d) => (d.remaining_debt || 0) <= 0).length;
+
   const filteredDebts = debts.filter((d) => {
-    if (activeTabFilter === 'UNPAID') return d.status !== 'PAID';
-    if (activeTabFilter === 'PAID') return d.status === 'PAID';
+    const isDebtPaid = (d.remaining_debt || 0) <= 0;
+    if (activeTabFilter === 'UNPAID' && isDebtPaid) return false;
+    if (activeTabFilter === 'PAID' && !isDebtPaid) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const matchName = (d.customer_name || '').toLowerCase().includes(q);
+      const matchPhone = d.phone ? d.phone.toLowerCase().includes(q) : false;
+      return matchName || matchPhone;
+    }
     return true;
   });
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Total Outstanding Header */}
+      {/* Total Outstanding Header Banner */}
       <View style={styles.headerCard}>
         <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.headerLabel}>Total Utang Pelanggan Belum Lunas</Text>
-            <Text style={styles.headerTotal}>{formatRupiah(totalOutstanding)}</Text>
+          <View style={styles.headerTextCol}>
+            <Text style={styles.headerLabel}>Total Utang Belum Lunas</Text>
+            <Text style={styles.headerTotal} numberOfLines={1}>
+              {formatRupiah(totalOutstanding)}
+            </Text>
           </View>
-          <TouchableOpacity style={styles.addDebtBtn} onPress={() => setIsAddModalVisible(true)}>
-            <Ionicons name="add" color="#FFFFFF" size={18} />
+          <TouchableOpacity
+            style={styles.addDebtBtn}
+            onPress={() => setIsAddModalVisible(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="add-circle" color="#FFFFFF" size={18} />
             <Text style={styles.addDebtBtnText}>Catat Utang</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Filter Tabs */}
-      <View style={styles.filterBar}>
-        <TouchableOpacity
-          style={[styles.filterChip, activeTabFilter === 'UNPAID' && styles.filterChipActive]}
-          onPress={() => setActiveTabFilter('UNPAID')}
-        >
-          <Text style={[styles.filterChipText, activeTabFilter === 'UNPAID' && styles.filterChipTextActive]}>
-            Belum Lunas ({debts.filter((d) => d.status !== 'PAID').length})
-          </Text>
-        </TouchableOpacity>
+      {/* Search & Filter Bar */}
+      <View style={styles.filterSection}>
+        {/* Search Input */}
+        <View style={styles.searchBar}>
+          <Ionicons name="search-outline" color={Colors.textMuted} size={18} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Cari nama pelanggan / no. HP..."
+            placeholderTextColor={Colors.textMuted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="close-circle" color={Colors.textMuted} size={18} />
+            </TouchableOpacity>
+          )}
+        </View>
 
-        <TouchableOpacity
-          style={[styles.filterChip, activeTabFilter === 'PAID' && styles.filterChipActive]}
-          onPress={() => setActiveTabFilter('PAID')}
+        {/* Filter Chips */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScrollContent}
         >
-          <Text style={[styles.filterChipText, activeTabFilter === 'PAID' && styles.filterChipTextActive]}>
-            Lunas ({debts.filter((d) => d.status === 'PAID').length})
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterChip, activeTabFilter === 'UNPAID' && styles.filterChipActive]}
+            onPress={() => setActiveTabFilter('UNPAID')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.filterChipText, activeTabFilter === 'UNPAID' && styles.filterChipTextActive]}>
+              Belum Lunas ({unpaidCount})
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.filterChip, activeTabFilter === 'ALL' && styles.filterChipActive]}
-          onPress={() => setActiveTabFilter('ALL')}
-        >
-          <Text style={[styles.filterChipText, activeTabFilter === 'ALL' && styles.filterChipTextActive]}>
-            Semua ({debts.length})
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterChip, activeTabFilter === 'PAID' && styles.filterChipActive]}
+            onPress={() => setActiveTabFilter('PAID')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.filterChipText, activeTabFilter === 'PAID' && styles.filterChipTextActive]}>
+              Lunas ({paidCount})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.filterChip, activeTabFilter === 'ALL' && styles.filterChipActive]}
+            onPress={() => setActiveTabFilter('ALL')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.filterChipText, activeTabFilter === 'ALL' && styles.filterChipTextActive]}>
+              Semua ({debts.length})
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
       </View>
 
       {/* Debt List */}
@@ -208,115 +301,171 @@ export default function DebtScreen() {
         data={filteredDebts}
         keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={styles.listContent}
-        renderItem={({ item }) => (
-          <View style={styles.debtCard}>
-            <View style={styles.cardTop}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.customerName}>{item.customer_name}</Text>
-                {item.phone ? (
-                  <Text style={styles.phoneText}>📱 {item.phone}</Text>
+        renderItem={({ item }) => {
+          const isPaid = (item.remaining_debt || 0) <= 0;
+          const isPartial = (item.remaining_debt || 0) > 0 && item.remaining_debt < item.total_debt;
+          const initial = item.customer_name ? item.customer_name[0].toUpperCase() : '?';
+
+          return (
+            <View style={styles.debtCard}>
+              {/* Card Top: Customer Info & Status Badge */}
+              <View style={styles.cardTop}>
+                <View style={styles.customerInfoRow}>
+                  <View style={[styles.avatarCircle, isPaid && styles.avatarCirclePaid]}>
+                    <Text style={[styles.avatarText, isPaid && styles.avatarTextPaid]}>{initial}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.customerName} numberOfLines={1}>
+                      {item.customer_name}
+                    </Text>
+                    {item.phone ? (
+                      <TouchableOpacity
+                        onPress={() => handleSendWaReminder(item)}
+                        style={styles.phoneClickable}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="call-outline" color={Colors.primary} size={12} />
+                        <Text style={styles.phoneText}>{item.phone}</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <Text style={styles.phoneTextMuted}>Tanpa No. HP</Text>
+                    )}
+                    <Text style={styles.dateText}>
+                      Tgl: {formatTanggal(item.created_at)}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Status Badge */}
+                <View
+                  style={[
+                    styles.statusBadge,
+                    isPaid ? styles.badgePaid : isPartial ? styles.badgePartial : styles.badgeUnpaid,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.statusBadgeText,
+                      isPaid ? styles.badgePaidText : isPartial ? styles.badgePartialText : styles.badgeUnpaidText,
+                    ]}
+                  >
+                    {isPaid ? 'LUNAS' : isPartial ? 'DICICIL' : 'BELUM BAYAR'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Money Summary */}
+              <View style={styles.moneyContainer}>
+                <View style={styles.moneyCol}>
+                  <Text style={styles.moneyLabel}>Total Kasbon</Text>
+                  <Text style={styles.moneyValue} numberOfLines={1}>
+                    {formatRupiah(item.total_debt)}
+                  </Text>
+                </View>
+
+                <View style={styles.moneyDivider} />
+
+                <View style={styles.moneyCol}>
+                  <Text style={styles.moneyLabel}>Sisa Utang</Text>
+                  <Text
+                    style={[
+                      styles.moneyValue,
+                      { color: isPaid ? Colors.success : Colors.danger, fontWeight: 'bold' },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {formatRupiah(item.remaining_debt)}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Action Buttons */}
+              <View style={styles.actionsContainer}>
+                {!isPaid ? (
+                  <>
+                    {/* Row 1: Primary Actions */}
+                    <View style={styles.actionsRow}>
+                      <TouchableOpacity
+                        style={styles.payBtn}
+                        onPress={() => {
+                          setSelectedDebt(item);
+                          setPayAmount(item.remaining_debt.toString());
+                          setIsPayModalVisible(true);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="card-outline" color="#FFFFFF" size={15} />
+                        <Text style={styles.payBtnText}>Bayar / Cicil</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.waBtn}
+                        onPress={() => handleSendWaReminder(item)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="logo-whatsapp" color={Colors.success} size={15} />
+                        <Text style={styles.waBtnText}>Ingatkan WA</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Row 2: Secondary Actions */}
+                    <View style={styles.actionsRow}>
+                      <TouchableOpacity
+                        style={styles.historyBtn}
+                        onPress={() => openPaymentHistory(item)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="time-outline" color={Colors.primaryDark} size={14} />
+                        <Text style={styles.historyBtnText}>Riwayat Cicilan</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.deleteBtn}
+                        onPress={() => handleDeleteDebt(item)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="trash-outline" color={Colors.danger} size={14} />
+                        <Text style={styles.deleteBtnText}>Hapus</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
                 ) : (
-                  <Text style={styles.phoneTextMuted}>Tidak ada No. HP</Text>
+                  /* Paid Debt Actions */
+                  <View style={styles.actionsRow}>
+                    <TouchableOpacity
+                      style={styles.historyBtn}
+                      onPress={() => openPaymentHistory(item)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="time-outline" color={Colors.primaryDark} size={14} />
+                      <Text style={styles.historyBtnText}>Riwayat Pembayaran</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.deleteBtn}
+                      onPress={() => handleDeleteDebt(item)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="trash-outline" color={Colors.danger} size={14} />
+                      <Text style={styles.deleteBtnText}>Hapus</Text>
+                    </TouchableOpacity>
+                  </View>
                 )}
-                <Text style={styles.dateText}>Tgl: {formatTanggal(item.created_at)}</Text>
-              </View>
-
-              {/* Status Badge */}
-              <View
-                style={[
-                  styles.statusBadge,
-                  item.status === 'PAID'
-                    ? styles.badgePaid
-                    : item.status === 'PARTIAL'
-                    ? styles.badgePartial
-                    : styles.badgeUnpaid,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.statusBadgeText,
-                    item.status === 'PAID'
-                      ? styles.badgePaidText
-                      : item.status === 'PARTIAL'
-                      ? styles.badgePartialText
-                      : styles.badgeUnpaidText,
-                  ]}
-                >
-                  {item.status === 'PAID' ? 'LUNAS' : item.status === 'PARTIAL' ? 'DICICIL' : 'BELUM BAYAR'}
-                </Text>
               </View>
             </View>
-
-            <View style={styles.divider} />
-
-            {/* Money Metrics */}
-            <View style={styles.moneyRow}>
-              <View style={styles.moneyCol}>
-                <Text style={styles.moneyLabel}>Total Kasbon</Text>
-                <Text style={styles.moneyValue}>{formatRupiah(item.total_debt)}</Text>
-              </View>
-
-              <View style={styles.moneyCol}>
-                <Text style={styles.moneyLabel}>Sisa Utang</Text>
-                <Text
-                  style={[
-                    styles.moneyValue,
-                    { color: item.remaining_debt > 0 ? Colors.danger : Colors.success, fontWeight: 'bold' },
-                  ]}
-                >
-                  {formatRupiah(item.remaining_debt)}
-                </Text>
-              </View>
-            </View>
-
-            {/* Actions Bar */}
-            <View style={styles.actionsContainer}>
-              {item.remaining_debt > 0 ? (
-                <>
-                  <TouchableOpacity
-                    style={styles.payBtn}
-                    onPress={() => {
-                      setSelectedDebt(item);
-                      setPayAmount(item.remaining_debt.toString());
-                      setIsPayModalVisible(true);
-                    }}
-                  >
-                    <Ionicons name="card-outline" color="#FFFFFF" size={14} />
-                    <Text style={styles.payBtnText}>Bayar Utang</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.waBtn}
-                    onPress={() => handleSendWaReminder(item)}
-                  >
-                    <Ionicons name="logo-whatsapp" color={Colors.success} size={14} />
-                    <Text style={styles.waBtnText}>Ingatkan WA</Text>
-                  </TouchableOpacity>
-                </>
-              ) : null}
-
-              <TouchableOpacity
-                style={styles.historyBtn}
-                onPress={() => openPaymentHistory(item)}
-              >
-                <Ionicons name="time-outline" color={Colors.primaryDark} size={14} />
-                <Text style={styles.historyBtnText}>Riwayat</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.deleteBtn}
-                onPress={() => handleDeleteDebt(item)}
-              >
-                <Ionicons name="trash-outline" color={Colors.danger} size={14} />
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
+          );
+        }}
         ListEmptyComponent={
           <View style={styles.emptyBox}>
             <Ionicons name="book-outline" color={Colors.textMuted} size={48} />
-            <Text style={styles.emptyTitle}>Tidak Ada Catatan Kasbon</Text>
-            <Text style={styles.emptySub}>Semua kasbon pelanggan telah lunas atau belum ada data.</Text>
+            <Text style={styles.emptyTitle}>
+              {searchQuery ? 'Catatan Kasbon Tidak Ditemukan' : 'Tidak Ada Catatan Kasbon'}
+            </Text>
+            <Text style={styles.emptySub}>
+              {searchQuery
+                ? `Tidak ada kasbon yang cocok dengan kata kunci "${searchQuery}".`
+                : 'Semua kasbon pelanggan telah lunas atau belum ada catatan utang.'}
+            </Text>
           </View>
         }
       />
@@ -331,48 +480,57 @@ export default function DebtScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Catat Utang / Kasbon Baru</Text>
-              <TouchableOpacity onPress={() => setIsAddModalVisible(false)}>
+              <View style={styles.modalTitleRow}>
+                <Ionicons name="person-add-outline" size={20} color={Colors.primary} />
+                <Text style={styles.modalTitle}>Catat Kasbon / Utang Baru</Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsAddModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <Ionicons name="close" color={Colors.text} size={24} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ marginBottom: 12 }}>
+            <ScrollView style={{ marginBottom: 16 }}>
               <Text style={styles.formLabel}>Nama Pelanggan (Wajib):</Text>
               <View style={styles.inputWithIcon}>
                 <Ionicons name="person-outline" color={Colors.textMuted} size={18} />
                 <TextInput
                   style={styles.iconInput}
                   placeholder="Contoh: Pak Budi / Bu Ani"
+                  placeholderTextColor={Colors.textMuted}
                   value={newCustomerName}
                   onChangeText={setNewCustomerName}
                 />
               </View>
 
-              <Text style={[styles.formLabel, { marginTop: 10 }]}>No. HP WhatsApp (Opsional):</Text>
+              <Text style={[styles.formLabel, { marginTop: 12 }]}>No. HP WhatsApp (Opsional):</Text>
               <View style={styles.inputWithIcon}>
-                <Ionicons name="call-outline" color={Colors.textMuted} size={18} />
+                <Ionicons name="logo-whatsapp" color={Colors.success} size={18} />
                 <TextInput
                   style={styles.iconInput}
                   keyboardType="phone-pad"
                   placeholder="Contoh: 08123456789"
+                  placeholderTextColor={Colors.textMuted}
                   value={newPhone}
                   onChangeText={setNewPhone}
                 />
               </View>
 
-              <Text style={[styles.formLabel, { marginTop: 10 }]}>Jumlah Utang / Kasbon (Rp):</Text>
-              <TextInput
-                style={styles.input}
-                keyboardType="numeric"
-                placeholder="Contoh: 50000"
-                value={newTotalDebt}
-                onChangeText={setNewTotalDebt}
-              />
+              <Text style={[styles.formLabel, { marginTop: 12 }]}>Jumlah Kasbon (Rp):</Text>
+              <View style={styles.inputWithIcon}>
+                <Text style={styles.currencyPrefix}>Rp</Text>
+                <TextInput
+                  style={styles.iconInput}
+                  keyboardType="numeric"
+                  placeholder="Contoh: 50000"
+                  placeholderTextColor={Colors.textMuted}
+                  value={newTotalDebt}
+                  onChangeText={setNewTotalDebt}
+                />
+              </View>
             </ScrollView>
 
-            <TouchableOpacity style={styles.submitModalBtn} onPress={handleAddDebt}>
-              <Text style={styles.submitModalBtnText}>Simpan Utang</Text>
+            <TouchableOpacity style={styles.submitModalBtn} onPress={handleAddDebt} activeOpacity={0.7}>
+              <Text style={styles.submitModalBtnText}>Simpan Catatan Utang</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -388,41 +546,69 @@ export default function DebtScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Bayar Cicilan / Pelunasan</Text>
-              <TouchableOpacity onPress={() => setIsPayModalVisible(false)}>
+              <View style={styles.modalTitleRow}>
+                <Ionicons name="cash-outline" size={20} color={Colors.primary} />
+                <Text style={styles.modalTitle}>Bayar Cicilan / Pelunasan</Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsPayModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <Ionicons name="close" color={Colors.text} size={24} />
               </TouchableOpacity>
             </View>
 
             {selectedDebt ? (
-              <ScrollView style={{ marginBottom: 12 }}>
+              <ScrollView style={{ marginBottom: 16 }}>
                 <View style={styles.debtSummaryBox}>
                   <Text style={styles.debtSummaryName}>{selectedDebt.customer_name}</Text>
                   <Text style={styles.debtSummaryRemaining}>
-                    Sisa Utang: {formatRupiah(selectedDebt.remaining_debt)}
+                    Sisa Utang: <Text style={{ fontWeight: 'bold' }}>{formatRupiah(selectedDebt.remaining_debt)}</Text>
                   </Text>
                 </View>
 
-                <Text style={styles.formLabel}>Nominal Dibayarkan (Rp):</Text>
-                <TextInput
-                  style={styles.input}
-                  keyboardType="numeric"
-                  placeholder="Masukkan nominal bayar..."
-                  value={payAmount}
-                  onChangeText={setPayAmount}
-                />
+                <Text style={styles.formLabel}>Nominal Pembayaran (Rp):</Text>
+                <View style={styles.inputWithIcon}>
+                  <Text style={styles.currencyPrefix}>Rp</Text>
+                  <TextInput
+                    style={styles.iconInput}
+                    keyboardType="numeric"
+                    placeholder="Masukkan nominal bayar..."
+                    placeholderTextColor={Colors.textMuted}
+                    value={payAmount}
+                    onChangeText={setPayAmount}
+                  />
+                </View>
 
-                <Text style={[styles.formLabel, { marginTop: 10 }]}>Catatan / Keterangan (Opsional):</Text>
+                {/* Quick amount buttons */}
+                <View style={styles.quickAmountRow}>
+                  <TouchableOpacity
+                    style={styles.quickAmountBtn}
+                    onPress={() => setPayAmount(selectedDebt.remaining_debt.toString())}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.quickAmountText}>Lunas ({formatRupiah(selectedDebt.remaining_debt)})</Text>
+                  </TouchableOpacity>
+                  {selectedDebt.remaining_debt >= 10000 ? (
+                    <TouchableOpacity
+                      style={styles.quickAmountBtn}
+                      onPress={() => setPayAmount(Math.round(selectedDebt.remaining_debt / 2).toString())}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.quickAmountText}>50% ({formatRupiah(Math.round(selectedDebt.remaining_debt / 2))})</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+
+                <Text style={[styles.formLabel, { marginTop: 12 }]}>Catatan / Keterangan (Opsional):</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Contoh: Bayar lunas via Transfer QRIS"
+                  placeholder="Contoh: Bayar via Tunai / Transfer QRIS"
+                  placeholderTextColor={Colors.textMuted}
                   value={payNotes}
                   onChangeText={setPayNotes}
                 />
               </ScrollView>
             ) : null}
 
-            <TouchableOpacity style={styles.submitModalBtn} onPress={handlePayDebtSubmit}>
+            <TouchableOpacity style={styles.submitModalBtn} onPress={handlePayDebtSubmit} activeOpacity={0.7}>
               <Text style={styles.submitModalBtnText}>Simpan Pembayaran</Text>
             </TouchableOpacity>
           </View>
@@ -439,28 +625,58 @@ export default function DebtScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Riwayat Cicilan Pembayaran</Text>
-              <TouchableOpacity onPress={() => setIsHistoryModalVisible(false)}>
+              <View style={styles.modalTitleRow}>
+                <Ionicons name="time-outline" size={20} color={Colors.primary} />
+                <Text style={styles.modalTitle}>Riwayat Pembayaran</Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsHistoryModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <Ionicons name="close" color={Colors.text} size={24} />
               </TouchableOpacity>
             </View>
+
+            {selectedDebt ? (
+              <View style={styles.historyCustomerHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.historyCustomerName}>{selectedDebt.customer_name}</Text>
+                  <Text style={styles.historyCustomerMeta}>
+                    Total: {formatRupiah(selectedDebt.total_debt)} • Sisa: {formatRupiah(selectedDebt.remaining_debt)}
+                  </Text>
+                </View>
+                <View style={[styles.statusBadge, selectedDebt.remaining_debt <= 0 ? styles.badgePaid : styles.badgeUnpaid]}>
+                  <Text style={[styles.statusBadgeText, selectedDebt.remaining_debt <= 0 ? styles.badgePaidText : styles.badgeUnpaidText]}>
+                    {selectedDebt.remaining_debt <= 0 ? 'LUNAS' : 'BELUM LUNAS'}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
 
             <FlatList
               data={paymentHistory}
               keyExtractor={(item) => item.id.toString()}
               renderItem={({ item }) => (
                 <View style={styles.historyRow}>
-                  <View>
+                  <View style={styles.historyIconBg}>
+                    <Ionicons name="checkmark-circle" color={Colors.success} size={20} />
+                  </View>
+                  <View style={{ flex: 1 }}>
                     <Text style={styles.historyAmount}>{formatRupiah(item.amount_paid)}</Text>
                     <Text style={styles.historyDate}>{formatTanggal(item.payment_date)}</Text>
                     {item.notes ? <Text style={styles.historyNotes}>Catatan: {item.notes}</Text> : null}
                   </View>
+                  <TouchableOpacity
+                    style={styles.historyDeleteBtn}
+                    onPress={() => handleDeletePaymentItem(item)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="trash-outline" color={Colors.danger} size={16} />
+                  </TouchableOpacity>
                 </View>
               )}
               ListEmptyComponent={
-                <Text style={{ textAlign: 'center', marginVertical: 20, color: Colors.textMuted }}>
-                  Belum ada riwayat cicilan.
-                </Text>
+                <View style={styles.emptyHistoryBox}>
+                  <Ionicons name="receipt-outline" color={Colors.textMuted} size={36} />
+                  <Text style={styles.emptyHistoryText}>Belum ada riwayat cicilan/pembayaran.</Text>
+                </View>
               }
             />
           </View>
@@ -477,18 +693,24 @@ const styles = StyleSheet.create({
   },
   headerCard: {
     backgroundColor: Colors.primaryDark,
-    padding: 16,
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 10,
+  },
+  headerTextCol: {
+    flex: 1,
   },
   headerLabel: {
-    color: '#E2E8F0',
+    color: '#CCFBF1',
     fontSize: 12,
+    fontWeight: '500',
   },
   headerTotal: {
     color: '#FFFFFF',
@@ -503,37 +725,60 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
-    gap: 4,
+    gap: 5,
+    flexShrink: 0,
   },
   addDebtBtnText: {
     color: '#FFFFFF',
     fontWeight: 'bold',
     fontSize: 13,
   },
-  filterBar: {
-    flexDirection: 'row',
+  filterSection: {
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 6,
+    paddingTop: 10,
+    paddingBottom: 4,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    height: 40,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: 8,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 13,
+    color: Colors.text,
+  },
+  filterScrollContent: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 2,
   },
   filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 20,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: Colors.border,
   },
   filterChipActive: {
-    backgroundColor: Colors.primaryLight,
-    borderColor: Colors.primary,
+    backgroundColor: Colors.primaryDark,
+    borderColor: Colors.primaryDark,
   },
   filterChipText: {
     fontSize: 12,
     color: Colors.textSecondary,
+    fontWeight: '500',
   },
   filterChipTextActive: {
-    color: Colors.primaryDark,
+    color: '#FFFFFF',
     fontWeight: 'bold',
   },
   listContent: {
@@ -542,27 +787,62 @@ const styles = StyleSheet.create({
   },
   debtCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 14,
-    marginBottom: 10,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: Colors.border,
-    ...getShadowStyle(1),
+    ...getShadowStyle(2),
   },
   cardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    gap: 8,
+  },
+  customerInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    flex: 1,
+  },
+  avatarCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#E6FFFA',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+  },
+  avatarCirclePaid: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+  },
+  avatarText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: Colors.primaryDark,
+  },
+  avatarTextPaid: {
+    color: Colors.textMuted,
   },
   customerName: {
     fontSize: 16,
     fontWeight: 'bold',
     color: Colors.text,
   },
+  phoneClickable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
   phoneText: {
     fontSize: 12,
-    color: Colors.primaryDark,
-    marginTop: 2,
+    color: Colors.primary,
+    fontWeight: '500',
   },
   phoneTextMuted: {
     fontSize: 12,
@@ -570,66 +850,75 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   dateText: {
-    fontSize: 10,
+    fontSize: 11,
     color: Colors.textMuted,
-    marginTop: 2,
+    marginTop: 3,
   },
   statusBadge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
+    alignSelf: 'flex-start',
   },
   statusBadgeText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 'bold',
+    letterSpacing: 0.3,
   },
   badgeUnpaid: {
-    backgroundColor: Colors.dangerLight,
+    backgroundColor: '#FEE2E2',
   },
   badgeUnpaidText: {
-    color: Colors.danger,
-    fontSize: 11,
-    fontWeight: 'bold',
+    color: '#DC2626',
   },
   badgePartial: {
-    backgroundColor: Colors.secondaryLight,
+    backgroundColor: '#FEF3C7',
   },
   badgePartialText: {
-    color: Colors.secondary,
-    fontSize: 11,
-    fontWeight: 'bold',
+    color: '#D97706',
   },
   badgePaid: {
-    backgroundColor: Colors.successLight,
+    backgroundColor: '#DCFCE7',
   },
   badgePaidText: {
-    color: Colors.success,
-    fontSize: 11,
-    fontWeight: 'bold',
+    color: '#16A34A',
   },
-  divider: {
-    height: 1,
-    backgroundColor: '#F1F5F9',
-    marginVertical: 10,
-  },
-  moneyRow: {
+  moneyContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginVertical: 12,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
-  moneyCol: {},
+  moneyCol: {
+    flex: 1,
+  },
+  moneyDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: '#E2E8F0',
+    marginHorizontal: 8,
+  },
   moneyLabel: {
     fontSize: 11,
     color: Colors.textMuted,
   },
   moneyValue: {
-    fontSize: 14,
+    fontSize: 15,
     color: Colors.text,
+    fontWeight: '600',
     marginTop: 2,
   },
   actionsContainer: {
+    gap: 8,
+  },
+  actionsRow: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
   },
   payBtn: {
     flex: 1,
@@ -637,55 +926,65 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    borderRadius: 6,
-    gap: 4,
+    height: 38,
+    borderRadius: 8,
+    gap: 6,
   },
   payBtnText: {
     color: '#FFFFFF',
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: 'bold',
   },
   waBtn: {
-    backgroundColor: Colors.successLight,
+    flex: 1,
+    backgroundColor: '#ECFDF5',
     borderWidth: 1,
-    borderColor: Colors.success,
+    borderColor: '#10B981',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 6,
-    gap: 4,
+    justifyContent: 'center',
+    height: 38,
+    borderRadius: 8,
+    gap: 6,
   },
   waBtnText: {
-    color: Colors.success,
-    fontSize: 12,
+    color: '#059669',
+    fontSize: 13,
     fontWeight: 'bold',
   },
   historyBtn: {
+    flex: 1,
     backgroundColor: '#F1F5F9',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 6,
-    gap: 4,
+    justifyContent: 'center',
+    height: 34,
+    borderRadius: 8,
+    gap: 5,
   },
   historyBtnText: {
     color: Colors.primaryDark,
     fontSize: 12,
+    fontWeight: '600',
   },
   deleteBtn: {
-    backgroundColor: Colors.dangerLight,
-    width: 34,
-    height: 34,
-    borderRadius: 6,
-    justifyContent: 'center',
+    backgroundColor: '#FEE2E2',
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    height: 34,
+    borderRadius: 8,
+    gap: 4,
+  },
+  deleteBtnText: {
+    color: Colors.danger,
+    fontSize: 12,
+    fontWeight: '600',
   },
   emptyBox: {
     alignItems: 'center',
-    padding: 40,
+    padding: 36,
   },
   emptyTitle: {
     fontSize: 16,
@@ -698,6 +997,7 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     marginTop: 4,
     textAlign: 'center',
+    lineHeight: 18,
   },
   modalOverlay: {
     flex: 1,
@@ -706,22 +1006,27 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     maxHeight: '85%',
-    padding: 16,
+    padding: 18,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
     paddingBottom: 12,
   },
+  modalTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: 'bold',
     color: Colors.text,
   },
@@ -729,38 +1034,44 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: Colors.textSecondary,
-    marginBottom: 4,
+    marginBottom: 5,
   },
   inputWithIcon: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    height: 42,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 44,
     backgroundColor: '#FAFAFA',
+  },
+  currencyPrefix: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: Colors.textSecondary,
+    marginRight: 4,
   },
   iconInput: {
     flex: 1,
-    marginLeft: 8,
     fontSize: 14,
     color: Colors.text,
+    paddingVertical: 0,
   },
   input: {
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: 8,
+    borderRadius: 10,
     paddingHorizontal: 12,
-    height: 42,
+    height: 44,
     fontSize: 14,
     color: Colors.text,
     backgroundColor: '#FAFAFA',
   },
   submitModalBtn: {
     backgroundColor: Colors.primary,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingVertical: 13,
+    borderRadius: 10,
     alignItems: 'center',
   },
   submitModalBtnText: {
@@ -769,10 +1080,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   debtSummaryBox: {
-    backgroundColor: Colors.dangerLight,
+    backgroundColor: '#FEF2F2',
     padding: 12,
-    borderRadius: 8,
-    marginBottom: 12,
+    borderRadius: 10,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
   },
   debtSummaryName: {
     fontSize: 16,
@@ -782,12 +1095,58 @@ const styles = StyleSheet.create({
   debtSummaryRemaining: {
     fontSize: 13,
     color: Colors.danger,
+    marginTop: 3,
+  },
+  quickAmountRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  quickAmountBtn: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  quickAmountText: {
+    fontSize: 11,
+    color: Colors.primaryDark,
+    fontWeight: '600',
+  },
+  historyCustomerHeader: {
+    backgroundColor: '#F8FAFC',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  historyCustomerName: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: Colors.text,
+  },
+  historyCustomerMeta: {
+    fontSize: 12,
+    color: Colors.textMuted,
     marginTop: 2,
   },
   historyRow: {
-    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
+  },
+  historyIconBg: {
+    marginTop: 2,
   },
   historyAmount: {
     fontSize: 15,
@@ -803,5 +1162,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textSecondary,
     marginTop: 2,
+  },
+  historyDeleteBtn: {
+    padding: 8,
+    backgroundColor: '#FEE2E2',
+    borderRadius: 6,
+  },
+  emptyHistoryBox: {
+    alignItems: 'center',
+    paddingVertical: 30,
+  },
+  emptyHistoryText: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    marginTop: 8,
   },
 });

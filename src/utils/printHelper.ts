@@ -96,14 +96,26 @@ export function generateReceiptHtml(
 
         <div class="divider"></div>
 
-        <div class="total-row" style="font-size: 16px;">
-          <span>TOTAL</span>
-          <span>${formatRupiah(transaction.total_amount)}</span>
+        <div class="total-row" style="font-size: 15px;">
+          <span>TOTAL BELANJA</span>
+          <span>${formatRupiah(items.length > 0 ? items.reduce((acc, it) => acc + (it.subtotal || 0), 0) : transaction.total_amount)}</span>
         </div>
 
         <div class="total-row" style="font-size: 12px; font-weight: normal; margin-top: 6px;">
+          <span>Uang Diterima (Kasir)</span>
+          <span style="font-weight: bold;">${formatRupiah(transaction.total_amount)}</span>
+        </div>
+
+        ${transaction.payment_method.includes('UTANG') && (transaction.debt_amount ?? Math.max(0, (items.reduce((acc, it) => acc + (it.subtotal || 0), 0)) - transaction.total_amount)) > 0 ? `
+        <div class="total-row" style="font-size: 12px; font-weight: normal; margin-top: 4px; color: #b91c1c;">
+          <span>Dicatat Utang</span>
+          <span style="font-weight: bold;">${formatRupiah(transaction.debt_amount ?? Math.max(0, (items.reduce((acc, it) => acc + (it.subtotal || 0), 0)) - transaction.total_amount))}</span>
+        </div>
+        ` : ''}
+
+        <div class="total-row" style="font-size: 12px; font-weight: normal; margin-top: 4px;">
           <span>Metode Bayar</span>
-          <span style="font-weight: bold;">${transaction.payment_method}</span>
+          <span style="font-weight: bold;">${transaction.payment_method === 'CASH' && transaction.customer_name ? 'CASH (LUNAS)' : transaction.payment_method}</span>
         </div>
 
         <div class="footer">

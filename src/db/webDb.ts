@@ -60,6 +60,7 @@ class WebSQLiteDatabase {
               },
             ];
           }
+
         }
       }
     } catch (e) {
@@ -88,10 +89,12 @@ class WebSQLiteDatabase {
   }
 
   async getAllAsync<T>(sql: string, params: any[] = []): Promise<T[]> {
+    this.loadFromStorage();
     return this.querySqlStatement<T>(sql, params);
   }
 
   async getFirstAsync<T>(sql: string, params: any[] = []): Promise<T | null> {
+    this.loadFromStorage();
     const results = await this.querySqlStatement<T>(sql, params);
     return results.length > 0 ? results[0] : null;
   }
@@ -105,14 +108,14 @@ class WebSQLiteDatabase {
     if (upper.startsWith('CREATE TABLE')) {
       const match = sql.match(/CREATE TABLE IF NOT EXISTS (\w+)/i) || sql.match(/CREATE TABLE (\w+)/i);
       if (match) {
-        const tableName = match[1];
+        const tableName = match[1].toLowerCase();
         if (!this.data[tableName]) {
           this.data[tableName] = [];
           this.autoIds[tableName] = 1;
         }
       }
-    } else if (upper.startsWith('INSERT INTO')) {
-      await this.executeWriteSql(sql, []);
+    } else if (upper.startsWith('INSERT INTO') || upper.startsWith('UPDATE') || upper.startsWith('DELETE')) {
+      this.executeWriteSql(sql, []);
     }
     this.saveToStorage();
   }
@@ -120,20 +123,19 @@ class WebSQLiteDatabase {
   private executeWriteSql(sql: string, params: any[] = []): { lastInsertRowId: number; changes: number } {
     const upper = sql.trim().toUpperCase();
 
-    // INSERT INTO products (...) VALUES (...)
+    // INSERT INTO table (...) VALUES (...)
     if (upper.startsWith('INSERT INTO')) {
       const tableMatch = sql.match(/INSERT INTO (\w+)/i);
       if (!tableMatch) return { lastInsertRowId: 0, changes: 0 };
-      const tableName = tableMatch[1];
+      const tableName = tableMatch[1].toLowerCase();
 
       if (!this.data[tableName]) {
         this.data[tableName] = [];
         this.autoIds[tableName] = 1;
       }
 
-      // Check multi-row insert vs parameterized insert
+      // Inline multi-row seed insert
       if (params.length === 0 && sql.includes('VALUES')) {
-        // Parse raw inline seed insert statements
         const valuesPart = sql.substring(sql.toUpperCase().indexOf('VALUES') + 6);
         const rows = this.parseInsertValuesList(valuesPart);
         const colMatch = sql.match(/\(([^)]+)\)\s*VALUES/i);
@@ -172,20 +174,19 @@ class WebSQLiteDatabase {
       return { lastInsertRowId: newId, changes: 1 };
     }
 
-    // UPDATE products SET stock = stock + ? WHERE id = ?
+    // UPDATE
     if (upper.startsWith('UPDATE')) {
-      const tableMatch = sql.match(/UPDATE (\w+)/i);
+      const tableMatch = sql.match(/UPDATE\s+(\w+)/i);
       if (!tableMatch) return { lastInsertRowId: 0, changes: 0 };
-      const tableName = tableMatch[1];
+      const tableName = tableMatch[1].toLowerCase();
       const items = this.data[tableName] || [];
-
       let changes = 0;
 
       if (upper.includes('SET STOCK = STOCK + ? WHERE ID = ?')) {
         const [delta, id] = params;
         items.forEach((item) => {
           if (item.id === id) {
-            item.stock = (item.stock || 0) + delta;
+            item.stock = (item.stock || 0) + Number(delta);
             changes++;
           }
         });
@@ -193,22 +194,16 @@ class WebSQLiteDatabase {
         const [delta, id] = params;
         items.forEach((item) => {
           if (item.id === id) {
-            item.stock = (item.stock || 0) - delta;
+            item.stock = (item.stock || 0) - Number(delta);
             changes++;
           }
         });
-      } else if (upper.includes('SET BARCODE = ?, NAME = ?')) {
-        const [barcode, name, buy_price, sell_price, stock, is_consignment, supplier_name, category, id] = params;
+      } else if (upper.includes('SET REMAINING_DEBT = ?, STATUS = ? WHERE ID = ?')) {
+        const [remaining_debt, status, id] = params;
         items.forEach((item) => {
           if (item.id === id) {
-            item.barcode = barcode;
-            item.name = name;
-            item.buy_price = buy_price;
-            item.sell_price = sell_price;
-            item.stock = stock;
-            item.is_consignment = is_consignment;
-            item.supplier_name = supplier_name;
-            item.category = category;
+            item.remaining_debt = Number(remaining_debt);
+            item.status = status;
             changes++;
           }
         });
@@ -216,9 +211,35 @@ class WebSQLiteDatabase {
         const [total_debt, remaining_debt, status, id] = params;
         items.forEach((item) => {
           if (item.id === id) {
-            item.total_debt = total_debt;
-            item.remaining_debt = remaining_debt;
+            item.total_debt = Number(total_debt);
+            item.remaining_debt = Number(remaining_debt);
             item.status = status;
+            changes++;
+          }
+        });
+      } else if (upper.includes('SET BARCODE = ?')) {
+        const [barcode, name, buy_price, sell_price, stock, is_consignment, supplier_name, category, id] = params;
+        items.forEach((item) => {
+          if (item.id === id) {
+            item.barcode = barcode;
+            item.name = name;
+            item.buy_price = Number(buy_price);
+            item.sell_price = Number(sell_price);
+            item.stock = Number(stock);
+            item.is_consignment = is_consignment;
+            item.supplier_name = supplier_name;
+            item.category = category;
+            changes++;
+          }
+        });
+      } else if (upper.includes('TOTAL_AMOUNT') && upper.includes('CASH_PAID') && upper.includes('WHERE ID = ?')) {
+        const [total_amount, cash_paid, debt_amount, payment_method, id] = params;
+        items.forEach((item) => {
+          if (item.id === id) {
+            item.total_amount = Number(total_amount);
+            item.cash_paid = Number(cash_paid);
+            item.debt_amount = Number(debt_amount);
+            item.payment_method = payment_method;
             changes++;
           }
         });
@@ -243,15 +264,24 @@ class WebSQLiteDatabase {
       return { lastInsertRowId: 0, changes };
     }
 
-    // DELETE FROM table WHERE id = ?
+    // DELETE
     if (upper.startsWith('DELETE FROM')) {
-      const tableMatch = sql.match(/DELETE FROM (\w+)/i);
+      const tableMatch = sql.match(/DELETE\s+FROM\s+(\w+)/i);
       if (!tableMatch) return { lastInsertRowId: 0, changes: 0 };
-      const tableName = tableMatch[1];
-      const idParam = params[0];
-
+      const tableName = tableMatch[1].toLowerCase();
       const initialLen = (this.data[tableName] || []).length;
-      this.data[tableName] = (this.data[tableName] || []).filter((item) => item.id !== idParam);
+
+      if (upper.includes('WHERE DEBT_ID = ?')) {
+        const debtIdParam = params[0];
+        this.data[tableName] = (this.data[tableName] || []).filter((item) => item.debt_id !== debtIdParam);
+      } else if (upper.includes('WHERE TRANSACTION_ID = ?')) {
+        const trxIdParam = params[0];
+        this.data[tableName] = (this.data[tableName] || []).filter((item) => item.transaction_id !== trxIdParam);
+      } else {
+        const idParam = params[0];
+        this.data[tableName] = (this.data[tableName] || []).filter((item) => item.id !== idParam);
+      }
+
       const changes = initialLen - this.data[tableName].length;
       this.saveToStorage();
       return { lastInsertRowId: 0, changes };
@@ -345,6 +375,12 @@ class WebSQLiteDatabase {
       }) as any[];
     }
 
+    // SELECT * FROM debt_payments WHERE id = ?
+    if (upper.includes('FROM DEBT_PAYMENTS WHERE ID = ?')) {
+      const id = params[0];
+      return (this.data.debt_payments || []).filter((dp) => dp.id === id) as any[];
+    }
+
     // SELECT * FROM debt_payments WHERE debt_id = ?
     if (upper.includes('FROM DEBT_PAYMENTS WHERE DEBT_ID = ?')) {
       const debtId = params[0];
@@ -356,6 +392,14 @@ class WebSQLiteDatabase {
     // SELECT * FROM prive_expenses
     if (upper.includes('FROM PRIVE_EXPENSES')) {
       return [...(this.data.prive_expenses || [])].sort((a, b) => b.id - a.id) as any[];
+    }
+
+    // SELECT * FROM transactions WHERE LOWER(customer_name) = LOWER(?)
+    if (upper.includes('FROM TRANSACTIONS') && upper.includes('CUSTOMER_NAME')) {
+      const name = (params[0] || '').toLowerCase().trim();
+      return (this.data.transactions || [])
+        .filter((t) => (t.customer_name || '').toLowerCase().trim() === name && (t.debt_amount || 0) > 0)
+        .sort((a, b) => a.id - b.id) as any[];
     }
 
     // SELECT * FROM transactions WHERE id = ?

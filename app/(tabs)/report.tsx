@@ -16,7 +16,12 @@ import * as Sharing from 'expo-sharing';
 import { FinancialReportSummary, Transaction } from '../../src/types';
 import { getFinancialSummary } from '../../src/services/reportService';
 import { getRecentTransactions } from '../../src/services/posService';
-import { formatRupiah, formatTanggal } from '../../src/utils/formatters';
+import {
+  formatRupiah,
+  formatTanggal,
+  getTransactionReceivedAmount,
+} from '../../src/utils/formatters';
+import { showAppAlert } from '../../src/utils/alertHelper';
 import { getShadowStyle } from '../../src/utils/styleHelper';
 import { Colors } from '../../src/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -164,26 +169,42 @@ export default function ReportScreen() {
         {/* Recent Transactions List */}
         <Text style={[styles.sectionHeader, { marginTop: 16 }]}>Transaksi Terakhir</Text>
 
-        {recentTransactions.map((trx) => (
-          <TouchableOpacity
-            key={trx.id}
-            style={styles.trxRowCard}
-            onPress={() => router.push(`/receipt/${trx.id}`)}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={styles.trxCode}>{trx.transaction_code}</Text>
-              <Text style={styles.trxMeta}>
-                {formatTanggal(trx.created_at)} • {trx.payment_method}
-                {trx.customer_name ? ` • ${trx.customer_name}` : ''}
-              </Text>
-            </View>
+        {recentTransactions.length > 0 ? (
+          recentTransactions.map((trx) => {
+            const receivedAmount = getTransactionReceivedAmount(trx);
+            const hasDebt = trx.payment_method === 'CASH+UTANG' || trx.payment_method === 'UTANG';
+            const debtVal = trx.debt_amount || (trx.total_amount - receivedAmount);
 
-            <View style={styles.trxRight}>
-              <Text style={styles.trxAmount}>{formatRupiah(trx.total_amount)}</Text>
-              <Ionicons name="chevron-forward" color={Colors.textMuted} size={18} />
-            </View>
-          </TouchableOpacity>
-        ))}
+            return (
+              <TouchableOpacity
+                key={trx.id}
+                style={styles.trxRowCard}
+                onPress={() => router.push(`/receipt/${trx.id}`)}
+                activeOpacity={0.7}
+              >
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={styles.trxCode}>{trx.transaction_code}</Text>
+                  <Text style={styles.trxMeta}>
+                    {formatTanggal(trx.created_at)} • {trx.payment_method}
+                    {trx.customer_name ? ` • ${trx.customer_name}` : ''}
+                  </Text>
+                </View>
+
+                <View style={styles.trxRight}>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={styles.trxAmount}>{formatRupiah(receivedAmount)}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" color={Colors.textMuted} size={18} />
+                </View>
+              </TouchableOpacity>
+            );
+          })
+        ) : (
+          <View style={styles.emptyBox}>
+            <Ionicons name="receipt-outline" color={Colors.textMuted} size={36} />
+            <Text style={styles.emptyText}>Belum ada riwayat transaksi</Text>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -358,5 +379,25 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: 'bold',
     color: Colors.primaryDark,
+  },
+  trxDebtSub: {
+    fontSize: 10,
+    color: Colors.danger,
+    fontWeight: 'bold',
+    marginTop: 1,
+  },
+  emptyBox: {
+    alignItems: 'center',
+    padding: 30,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  emptyText: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    marginTop: 8,
   },
 });

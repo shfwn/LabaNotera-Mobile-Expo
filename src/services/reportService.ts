@@ -2,14 +2,18 @@ import { SQLiteDatabase } from 'expo-sqlite';
 import { FinancialReportSummary } from '../types';
 
 export async function getFinancialSummary(db: SQLiteDatabase): Promise<FinancialReportSummary> {
-  // Total Revenue & Total Cost (HPP) from SUCCESS transactions
+  // Total Revenue (Uang Diterima dari Penjualan) & Total Cost (HPP) from SUCCESS transactions
   const salesSummary = await db.getFirstAsync<{
     total_revenue: number | null;
     total_cost: number | null;
     trx_count: number;
   }>(
     `SELECT 
-       SUM(total_amount) as total_revenue, 
+       SUM(CASE 
+             WHEN payment_method = 'UTANG' THEN COALESCE(cash_paid, 0)
+             WHEN payment_method = 'CASH+UTANG' THEN COALESCE(cash_paid, 0)
+             ELSE total_amount 
+           END) as total_revenue, 
        SUM(total_cost) as total_cost,
        COUNT(*) as trx_count
      FROM transactions 

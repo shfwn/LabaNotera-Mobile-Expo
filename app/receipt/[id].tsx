@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useAppSQLiteContext as useSQLiteContext } from '../../src/db/AppDatabaseProvider';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Transaction, TransactionItem, ShopProfile } from '../../src/types';
 import { getTransactionDetails } from '../../src/services/posService';
 import { getShopProfile } from '../../src/services/profileService';
@@ -47,9 +47,11 @@ export default function ReceiptScreen() {
     }
   }, [db, id]);
 
-  useEffect(() => {
-    loadReceipt();
-  }, [loadReceipt]);
+  useFocusEffect(
+    useCallback(() => {
+      loadReceipt();
+    }, [loadReceipt])
+  );
 
   const handlePrint = async () => {
     if (!transaction) return;
@@ -136,7 +138,13 @@ export default function ReceiptScreen() {
           {/* Totals */}
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>TOTAL BELANJA</Text>
-            <Text style={styles.totalValue}>{formatRupiah(transaction.total_amount)}</Text>
+            <Text style={styles.totalValue}>
+              {formatRupiah(
+                items.length > 0
+                  ? items.reduce((sum, item) => sum + item.subtotal, 0)
+                  : transaction.total_amount + (transaction.debt_amount || 0)
+              )}
+            </Text>
           </View>
 
           {/* Payment detail rows */}
@@ -155,17 +163,14 @@ export default function ReceiptScreen() {
               </Text>
             </View>
 
-            {/* Cash paid — shown for CASH and CASH+UTANG */}
-            {(transaction.payment_method === 'CASH' || transaction.payment_method === 'CASH+UTANG') &&
-            transaction.cash_paid != null ? (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Uang Diterima</Text>
-                <Text style={styles.detailValue}>{formatRupiah(transaction.cash_paid)}</Text>
-              </View>
-            ) : null}
+            {/* Cash paid / Uang Diterima */}
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Uang Diterima</Text>
+              <Text style={styles.detailValue}>{formatRupiah(transaction.total_amount)}</Text>
+            </View>
 
             {/* Change — full CASH payment */}
-            {transaction.payment_method === 'CASH' && transaction.cash_paid != null && transaction.cash_paid >= transaction.total_amount ? (
+            {transaction.payment_method === 'CASH' && transaction.cash_paid != null && transaction.cash_paid > transaction.total_amount ? (
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Kembalian</Text>
                 <Text style={[styles.detailValue, { color: Colors.success }]}>
@@ -174,8 +179,8 @@ export default function ReceiptScreen() {
               </View>
             ) : null}
 
-            {/* Shortfall — CASH+UTANG */}
-            {transaction.payment_method === 'CASH+UTANG' && transaction.debt_amount != null ? (
+            {/* Shortfall — CASH+UTANG (only if debt_amount > 0) */}
+            {transaction.payment_method === 'CASH+UTANG' && transaction.debt_amount != null && transaction.debt_amount > 0 ? (
               <View style={[styles.detailRow, styles.detailRowHighlight]}>
                 <Text style={[styles.detailLabel, { color: Colors.danger }]}>Kurang / Dicatat Hutang</Text>
                 <Text style={[styles.detailValue, { color: Colors.danger, fontWeight: 'bold' }]}>
@@ -184,8 +189,8 @@ export default function ReceiptScreen() {
               </View>
             ) : null}
 
-            {/* Full UTANG */}
-            {transaction.payment_method === 'UTANG' && transaction.debt_amount != null ? (
+            {/* Full UTANG (only if debt_amount > 0) */}
+            {transaction.payment_method === 'UTANG' && transaction.debt_amount != null && transaction.debt_amount > 0 ? (
               <View style={[styles.detailRow, styles.detailRowHighlight]}>
                 <Text style={[styles.detailLabel, { color: Colors.danger }]}>Total Hutang</Text>
                 <Text style={[styles.detailValue, { color: Colors.danger, fontWeight: 'bold' }]}>
@@ -194,8 +199,17 @@ export default function ReceiptScreen() {
               </View>
             ) : null}
 
+            {/* Status Lunas jika sebelumnya utang lalu sudah lunas */}
+            {((transaction.payment_method === 'CASH+UTANG' || transaction.payment_method === 'UTANG') && (transaction.debt_amount == null || transaction.debt_amount <= 0)) ||
+             (transaction.payment_method === 'CASH' && transaction.customer_name) ? (
+              <View style={[styles.detailRow, { backgroundColor: '#f0fdf4', padding: 6, borderRadius: 6, marginTop: 4 }]}>
+                <Text style={[styles.detailLabel, { color: Colors.success, fontWeight: 'bold' }]}>Status Pembayaran</Text>
+                <Text style={[styles.detailValue, { color: Colors.success, fontWeight: 'bold' }]}>LUNAS (Utang Selesai)</Text>
+              </View>
+            ) : null}
+
             {/* Customer for debt transactions */}
-            {transaction.customer_name && (transaction.payment_method === 'UTANG' || transaction.payment_method === 'CASH+UTANG') ? (
+            {transaction.customer_name ? (
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Nama Pelanggan</Text>
                 <Text style={styles.detailValue}>{transaction.customer_name}</Text>

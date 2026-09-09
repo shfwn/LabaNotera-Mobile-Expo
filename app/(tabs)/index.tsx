@@ -8,13 +8,13 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { useAppSQLiteContext as useSQLiteContext } from '../../src/db/AppDatabaseProvider';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { Tabs, useRouter, useFocusEffect } from 'expo-router';
 import { FinancialReportSummary, Transaction, ShopProfile } from '../../src/types';
 import { getFinancialSummary } from '../../src/services/reportService';
 import { getRecentTransactions } from '../../src/services/posService';
 import { getShopProfile } from '../../src/services/profileService';
 import ProfileModal from '../../src/components/ProfileModal';
-import { formatRupiah, formatTanggal } from '../../src/utils/formatters';
+import { formatRupiah, formatTanggal, getTransactionReceivedAmount } from '../../src/utils/formatters';
 import { getShadowStyle } from '../../src/utils/styleHelper';
 import { Colors } from '../../src/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -51,22 +51,18 @@ export default function DashboardScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Top Financial Metrics Dashboard Section */}
-        <View style={styles.dashboardHero}>
-          {/* Header with Store Name & Profile Button on Top Right */}
-          <View style={styles.dashboardHeaderRow}>
-            <View style={{ flex: 1, marginRight: 8 }}>
-              <View style={styles.shopNameRow}>
-                <Ionicons name="storefront-outline" color="#5EEAD4" size={18} />
-                <Text style={styles.dashboardTitle} numberOfLines={1}>
-                  {profile?.shop_name || 'Warung LabaNotera'}
-                </Text>
-              </View>
-              <Text style={styles.dashboardSub}>Ringkasan Keuangan & Usaha Warung</Text>
+      {/* Configure Top Header Bar with Store Name & Profile Button */}
+      <Tabs.Screen
+        options={{
+          headerTitle: () => (
+            <View style={styles.headerShopRow}>
+              <Ionicons name="storefront-outline" color="#5EEAD4" size={20} />
+              <Text style={styles.headerShopName} numberOfLines={1}>
+                {profile?.shop_name || 'Warung LabaNotera'}
+              </Text>
             </View>
-
-            {/* Profile Button on Top Right */}
+          ),
+          headerRight: () => (
             <TouchableOpacity
               style={styles.profileHeaderBtn}
               onPress={() => setIsProfileModalVisible(true)}
@@ -75,6 +71,19 @@ export default function DashboardScreen() {
               <Ionicons name="person-circle-outline" color="#FFFFFF" size={18} />
               <Text style={styles.profileHeaderBtnText}>Profil</Text>
             </TouchableOpacity>
+          ),
+        }}
+      />
+
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Top Financial Metrics Dashboard Section */}
+        <View style={styles.dashboardHero}>
+          {/* Header with Beranda Title & Subtitle */}
+          <View style={styles.dashboardHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.dashboardTitle}>Beranda</Text>
+              <Text style={styles.dashboardSub}>Ringkasan Keuangan & Usaha Warung</Text>
+            </View>
           </View>
 
           <View style={styles.metricsContainer}>
@@ -225,25 +234,34 @@ export default function DashboardScreen() {
           </View>
 
           {recentTransactions.length > 0 ? (
-            recentTransactions.map((trx) => (
-              <TouchableOpacity
-                key={trx.id}
-                style={styles.trxItemCard}
-                onPress={() => router.push(`/receipt/${trx.id}`)}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.trxCode}>{trx.transaction_code}</Text>
-                  <Text style={styles.trxMeta}>
-                    {formatTanggal(trx.created_at)} • {trx.payment_method}
-                    {trx.customer_name ? ` • ${trx.customer_name}` : ''}
-                  </Text>
-                </View>
-                <View style={styles.trxAmountCol}>
-                  <Text style={styles.trxAmount}>{formatRupiah(trx.total_amount)}</Text>
-                  <Ionicons name="chevron-forward" color={Colors.textMuted} size={16} />
-                </View>
-              </TouchableOpacity>
-            ))
+            recentTransactions.slice(0, 5).map((trx) => {
+              const receivedAmount = getTransactionReceivedAmount(trx);
+              const hasDebt = trx.payment_method === 'CASH+UTANG' || trx.payment_method === 'UTANG';
+              const debtVal = trx.debt_amount || (trx.total_amount - receivedAmount);
+
+              return (
+                <TouchableOpacity
+                  key={trx.id}
+                  style={styles.trxItemCard}
+                  onPress={() => router.push(`/receipt/${trx.id}`)}
+                  activeOpacity={0.7}
+                >
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <Text style={styles.trxCode}>{trx.transaction_code}</Text>
+                    <Text style={styles.trxMeta}>
+                      {formatTanggal(trx.created_at)} • {trx.payment_method}
+                      {trx.customer_name ? ` • ${trx.customer_name}` : ''}
+                    </Text>
+                  </View>
+                  <View style={styles.trxAmountCol}>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={styles.trxAmount}>{formatRupiah(receivedAmount)}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" color={Colors.textMuted} size={16} />
+                  </View>
+                </TouchableOpacity>
+              );
+            })
           ) : (
             <View style={styles.emptyCard}>
               <Ionicons name="receipt-outline" color={Colors.textMuted} size={36} />
@@ -283,20 +301,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  shopNameRow: {
+  headerShopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
-  dashboardTitle: {
+  headerShopName: {
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: 'bold',
-    flexShrink: 1,
+    maxWidth: 220,
+  },
+  dashboardTitle: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: 'bold',
   },
   dashboardSub: {
     color: '#CCFBF1',
-    fontSize: 11,
+    fontSize: 12,
     marginTop: 2,
   },
   profileHeaderBtn: {
@@ -304,11 +327,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingVertical: 6,
     borderRadius: 20,
     gap: 5,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
+    marginRight: 16,
   },
   profileHeaderBtnText: {
     color: '#FFFFFF',
@@ -442,6 +466,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     color: Colors.primaryDark,
+  },
+  trxDebtSub: {
+    fontSize: 10,
+    color: Colors.danger,
+    fontWeight: 'bold',
+    marginTop: 1,
   },
   emptyCard: {
     backgroundColor: '#FFFFFF',

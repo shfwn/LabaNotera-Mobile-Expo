@@ -34,7 +34,6 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Beranda',
-          headerTitle: 'Beranda (isi nama warung)',
           tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" color={color} size={size} />,
         }}
       />

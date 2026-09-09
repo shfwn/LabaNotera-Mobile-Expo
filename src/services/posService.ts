@@ -34,7 +34,15 @@ export async function processCheckout(
   const actualCashPaid = cashPaid ?? (paymentMethod === 'CASH' ? totalAmount : 0);
   const shortfall = totalAmount - actualCashPaid;
   const isPartialPayment = paymentMethod === 'CASH' && shortfall > 0;
-  const effectivePaymentMethod: PaymentMethod = isPartialPayment ? 'CASH' : paymentMethod;
+  const effectivePaymentMethod: PaymentMethod = isPartialPayment ? 'CASH+UTANG' : paymentMethod;
+
+  // Hanya catat uang tunai yang benar-benar diterima pelanggan ke dalam transaksi
+  let recordedCashReceived = totalAmount;
+  if (isPartialPayment) {
+    recordedCashReceived = actualCashPaid; // Contoh: Beli 68rb bayar 50rb -> tercatat 50rb
+  } else if (paymentMethod === 'UTANG') {
+    recordedCashReceived = 0; // 0 rupiah diterima
+  }
 
   // Insert Transaction
   const trxResult = await db.runAsync(
@@ -42,11 +50,11 @@ export async function processCheckout(
      VALUES (?, ?, ?, ?, ?, ?, ?, 'SUCCESS')`,
     [
       transactionCode,
-      totalAmount,
+      recordedCashReceived,
       totalCost,
-      isPartialPayment ? 'CASH+UTANG' : paymentMethod,
-      paymentMethod === 'CASH' ? actualCashPaid : null,
-      isPartialPayment ? shortfall : (paymentMethod === 'UTANG' ? totalAmount : null),
+      effectivePaymentMethod,
+      isPartialPayment || paymentMethod === 'CASH' ? actualCashPaid : 0,
+      isPartialPayment ? shortfall : (paymentMethod === 'UTANG' ? totalAmount : 0),
       customerName || null,
     ]
   );
