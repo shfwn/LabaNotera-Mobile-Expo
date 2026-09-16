@@ -15,7 +15,7 @@ import { Transaction, TransactionItem, ShopProfile } from '../../src/types';
 import { getTransactionDetails } from '../../src/services/posService';
 import { getShopProfile } from '../../src/services/profileService';
 import { printReceipt, shareReceiptPdf } from '../../src/utils/printHelper';
-import { formatRupiah, formatTanggal } from '../../src/utils/formatters';
+import { formatRupiah, formatTanggal, formatQty } from '../../src/utils/formatters';
 import { getShadowStyle } from '../../src/utils/styleHelper';
 import { Colors } from '../../src/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -125,7 +125,7 @@ export default function ReceiptScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.itemName}>{item.product_name}</Text>
                   <Text style={styles.itemSub}>
-                    {item.qty} x {formatRupiah(item.sell_price)}
+                    {formatQty(item.qty)} x {formatRupiah(item.sell_price)}
                   </Text>
                 </View>
                 <Text style={styles.itemSubtotal}>{formatRupiah(item.subtotal)}</Text>

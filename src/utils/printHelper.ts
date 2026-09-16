@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { Transaction, TransactionItem } from '../types';
-import { formatRupiah, formatTanggal } from './formatters';
+import { formatRupiah, formatTanggal, formatQty } from './formatters';
 
 export function generateReceiptHtml(
   transaction: Transaction,
@@ -15,7 +15,7 @@ export function generateReceiptHtml(
     <tr>
       <td style="padding: 4px 0;">
         <div style="font-weight: bold; font-size: 13px;">${item.product_name}</div>
-        <div style="font-size: 11px; color: #555;">${item.qty} x ${formatRupiah(item.sell_price)}</div>
+        <div style="font-size: 11px; color: #555;">${formatQty(item.qty)} x ${formatRupiah(item.sell_price)}</div>
       </td>
       <td style="text-align: right; vertical-align: top; padding: 4px 0; font-size: 13px; font-weight: bold;">
         ${formatRupiah(item.subtotal)}

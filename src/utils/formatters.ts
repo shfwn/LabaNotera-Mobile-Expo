@@ -95,3 +95,35 @@ export function getProductCategory(product: { name: string; category?: string | 
   }
   return 'BARANG_POKOK';
 }
+
+export function isKgProduct(product: { name: string; category?: string | null }): boolean {
+  if (!product || !product.name) return false;
+  const nameLower = product.name.toLowerCase();
+  const kgKeywords = [
+    'kg', 'kilo', 'gram', 'gr',
+    'beras', 'telur', 'telor', 'gula', 'tepung',
+    'cabai', 'cabe', 'bawang', 'minyak curah',
+    'tomat', 'kentang', 'wortel', 'sayur', 'ikan', 'daging',
+    'ayam potong', 'kacang', 'kerupuk mentah', 'garam curah', 'curah'
+  ];
+  return kgKeywords.some((keyword) => {
+    const regex = new RegExp(`(^|\\s|\\(|\\/)${keyword}(\\s|\\)|\\/|$)`, 'i');
+    return regex.test(nameLower) || nameLower.includes(keyword);
+  });
+}
+
+export function formatQty(qty: number, isKg: boolean = false): string {
+  if (qty === 0.25) return '1/4 kg';
+  if (qty === 0.5) return '1/2 kg';
+  if (qty === 0.75) return '3/4 kg';
+  if (qty === 1.25) return '1 1/4 kg';
+  if (qty === 1.5) return '1 1/2 kg';
+  if (qty === 1.75) return '1 3/4 kg';
+
+  if (!Number.isInteger(qty)) {
+    const rounded = Number(qty.toFixed(2));
+    return isKg ? `${rounded} kg` : `${rounded}`;
+  }
+
+  return isKg ? `${qty} kg` : `${qty}`;
+}

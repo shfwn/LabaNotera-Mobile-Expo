@@ -26,8 +26,8 @@ export async function processCheckout(
   let totalCost = 0;
 
   for (const item of cart) {
-    totalAmount += item.product.sell_price * item.qty;
-    totalCost += item.product.buy_price * item.qty;
+    totalAmount += Math.round(item.product.sell_price * item.qty);
+    totalCost += Math.round(item.product.buy_price * item.qty);
   }
 
   // Detect partial payment: CASH with shortfall → treat remaining as UTANG
@@ -69,7 +69,7 @@ export async function processCheckout(
 
   // Insert Items & Deduct Stock
   for (const item of cart) {
-    const subtotal = item.product.sell_price * item.qty;
+    const subtotal = Math.round(item.product.sell_price * item.qty);
     await db.runAsync(
       `INSERT INTO transaction_items (transaction_id, product_id, product_name, qty, buy_price, sell_price, subtotal)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -103,8 +103,8 @@ export async function processCheckout(
       const newTotal = Number(existingDebt.total_debt || 0) + debtAmount;
       const newRemaining = Number(existingDebt.remaining_debt || 0) + debtAmount;
       await db.runAsync(
-        `UPDATE debts SET total_debt = ?, remaining_debt = ?, status = ? WHERE id = ?`,
-        [newTotal, newRemaining, 'UNPAID', existingDebt.id]
+        `UPDATE debts SET total_debt = ?, remaining_debt = ?, phone = COALESCE(?, phone), status = ? WHERE id = ?`,
+        [newTotal, newRemaining, customerPhone || null, 'UNPAID', existingDebt.id]
       );
     } else {
       await db.runAsync(

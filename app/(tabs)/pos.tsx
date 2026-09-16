@@ -19,7 +19,7 @@ import { getProducts, searchProducts } from '../../src/services/productService';
 import { processCheckout } from '../../src/services/posService';
 import { getShopProfile } from '../../src/services/profileService';
 import ProfileModal from '../../src/components/ProfileModal';
-import { formatRupiah, parseRupiahToNumber, getProductCategory } from '../../src/utils/formatters';
+import { formatRupiah, parseRupiahToNumber, getProductCategory, isKgProduct, formatQty } from '../../src/utils/formatters';
 import { getShadowStyle } from '../../src/utils/styleHelper';
 import { Colors } from '../../src/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -38,6 +38,13 @@ export default function PosScreen() {
   // Cart state
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCheckoutModalVisible, setIsCheckoutModalVisible] = useState(false);
+
+  // Weight picker modal state for items sold by kg / weight
+  const [selectedKgProduct, setSelectedKgProduct] = useState<Product | null>(null);
+  const [isWeightModalVisible, setIsWeightModalVisible] = useState(false);
+  const [customWeightInput, setCustomWeightInput] = useState('');
+  const [customMoneyInput, setCustomMoneyInput] = useState('');
+  const [selectedWeight, setSelectedWeight] = useState<number>(1);
 
   // Shop Profile state (QRIS and Bank Account)
   const [shopProfile, setShopProfile] = useState<ShopProfile | null>(null);
@@ -87,7 +94,7 @@ export default function PosScreen() {
   }, [products, selectedFilter]);
 
   // Cart operations
-  const addToCart = (product: Product) => {
+  const addToCart = (product: Product, qtyToAdd: number = 1) => {
     if (product.stock <= 0) {
       Alert.alert('Stok Habis', `Stok ${product.name} telah habis!`);
       return;
@@ -96,16 +103,110 @@ export default function PosScreen() {
     setCart((prev) => {
       const existing = prev.find((item) => item.product.id === product.id);
       if (existing) {
-        if (existing.qty >= product.stock) {
+        const newTotal = existing.qty + qtyToAdd;
+        if (newTotal > product.stock) {
           Alert.alert('Batas Stok', `Jumlah di keranjang melebihi stok yang ada (${product.stock}).`);
           return prev;
         }
         return prev.map((item) =>
-          item.product.id === product.id ? { ...item, qty: item.qty + 1 } : item
+          item.product.id === product.id ? { ...item, qty: newTotal } : item
         );
       }
-      return [...prev, { product, qty: 1 }];
+      return [...prev, { product, qty: qtyToAdd }];
     });
+  };
+
+  const openWeightModal = (product: Product, initialQty?: number) => {
+    if (product.stock <= 0) {
+      Alert.alert('Stok Habis', `Stok ${product.name} telah habis!`);
+      return;
+    }
+    const existing = cart.find((item) => item.product.id === product.id);
+    const currentQty = initialQty !== undefined ? initialQty : (existing ? existing.qty : 1);
+    setSelectedKgProduct(product);
+    setSelectedWeight(currentQty);
+    setCustomWeightInput(String(currentQty));
+    setCustomMoneyInput(formatRupiah(Math.round(product.sell_price * currentQty)));
+    setIsWeightModalVisible(true);
+  };
+
+  const handleProductPress = (product: Product) => {
+    if (product.stock <= 0) {
+      Alert.alert('Stok Habis', `Stok ${product.name} telah habis!`);
+      return;
+    }
+
+    if (isKgProduct(product)) {
+      openWeightModal(product);
+    } else {
+      addToCart(product);
+    }
+  };
+
+  const handleSelectWeightPreset = (presetWeight: number) => {
+    if (!selectedKgProduct) return;
+    setSelectedWeight(presetWeight);
+    setCustomWeightInput(String(presetWeight));
+    setCustomMoneyInput(formatRupiah(Math.round(selectedKgProduct.sell_price * presetWeight)));
+  };
+
+  const handleCustomWeightChange = (text: string) => {
+    setCustomWeightInput(text);
+    const parsed = parseFloat(text.replace(',', '.'));
+    if (!isNaN(parsed) && parsed > 0) {
+      setSelectedWeight(parsed);
+      if (selectedKgProduct) {
+        setCustomMoneyInput(formatRupiah(Math.round(selectedKgProduct.sell_price * parsed)));
+      }
+    } else {
+      setSelectedWeight(0);
+      setCustomMoneyInput('');
+    }
+  };
+
+  const handleCustomMoneyChange = (text: string) => {
+    const formatted = formatRupiah(text);
+    setCustomMoneyInput(formatted);
+    const num = parseRupiahToNumber(formatted);
+    if (selectedKgProduct && num > 0) {
+      const calculatedKg = Number((num / selectedKgProduct.sell_price).toFixed(3));
+      setSelectedWeight(calculatedKg);
+      setCustomWeightInput(String(calculatedKg));
+    } else {
+      setSelectedWeight(0);
+      setCustomWeightInput('');
+    }
+  };
+
+  const handleSaveWeightToCart = () => {
+    if (!selectedKgProduct || selectedWeight <= 0) {
+      Alert.alert('Jumlah Tidak Valid', 'Mohon pilih atau masukkan berat / nominal pembelian yang valid.');
+      return;
+    }
+    if (selectedWeight > selectedKgProduct.stock) {
+      Alert.alert(
+        'Batas Stok',
+        `Jumlah pembelian (${formatQty(selectedWeight, true)}) melebihi stok yang tersedia (${selectedKgProduct.stock} kg).`
+      );
+      return;
+    }
+
+    setCart((prev) => {
+      const existingIndex = prev.findIndex((item) => item.product.id === selectedKgProduct.id);
+      if (existingIndex >= 0) {
+        const updated = [...prev];
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          qty: selectedWeight,
+        };
+        return updated;
+      } else {
+        return [...prev, { product: selectedKgProduct, qty: selectedWeight }];
+      }
+    });
+
+    setIsWeightModalVisible(false);
+    setSelectedKgProduct(null);
   };
 
   const updateCartQty = (productId: number, delta: number) => {
@@ -113,7 +214,16 @@ export default function PosScreen() {
       prev
         .map((item) => {
           if (item.product.id === productId) {
-            const newQty = item.qty + delta;
+            const isKg = isKgProduct(item.product);
+            let step = delta;
+            if (isKg) {
+              if (delta > 0) {
+                step = item.qty < 1 ? 0.25 : (item.qty % 1 !== 0 ? 0.25 : 1);
+              } else {
+                step = item.qty <= 1 ? -0.25 : (item.qty % 1 !== 0 ? -0.25 : -1);
+              }
+            }
+            const newQty = Number((item.qty + step).toFixed(2));
             if (newQty > item.product.stock) {
               Alert.alert('Batas Stok', `Stok maksimum ${item.product.stock}`);
               return item;
@@ -131,8 +241,8 @@ export default function PosScreen() {
   };
 
   // Calculations
-  const totalCartPrice = cart.reduce((sum, item) => sum + item.product.sell_price * item.qty, 0);
-  const totalCartItems = cart.reduce((sum, item) => sum + item.qty, 0);
+  const totalCartPrice = cart.reduce((sum, item) => sum + Math.round(item.product.sell_price * item.qty), 0);
+  const totalCartItems = cart.reduce((sum, item) => sum + (item.qty < 1 ? 1 : Math.round(item.qty)), 0);
   // Parse formatted string "Rp 20.000" → 20000
   const numericCashPaid = parseRupiahToNumber(cashAmountInput);
   const changeAmount = numericCashPaid - totalCartPrice;
@@ -162,6 +272,24 @@ export default function PosScreen() {
   // Process payment
   const handleFinalCheckout = async () => {
     if (cart.length === 0) return;
+
+    // Strict validation for debt transactions: BOTH Name AND Phone are mandatory
+    if (isCustomerNameRequired) {
+      if (!customerName.trim()) {
+        Alert.alert(
+          'Nama Pelanggan Wajib Diisi',
+          'Mohon masukkan nama pelanggan untuk mencatat transaksi utang / kasbon.'
+        );
+        return;
+      }
+      if (!customerPhone.trim()) {
+        Alert.alert(
+          'Nomor HP Wajib Diisi',
+          'Mohon masukkan nomor HP / WhatsApp pelanggan untuk catatan utang agar dapat dihubungi atau diingatkan via WA.'
+        );
+        return;
+      }
+    }
 
     try {
       setIsSubmitting(true);
@@ -296,18 +424,28 @@ export default function PosScreen() {
         renderItem={({ item }) => {
           const cartItem = cart.find((c) => c.product.id === item.id);
           const inCartQty = cartItem ? cartItem.qty : 0;
+          const isKg = isKgProduct(item);
 
           return (
             <TouchableOpacity
               style={[styles.productCard, item.stock <= 0 && styles.productCardDisabled]}
-              onPress={() => addToCart(item)}
+              onPress={() => handleProductPress(item)}
               activeOpacity={0.8}
             >
-              {item.is_consignment === 1 ? (
-                <View style={styles.badgeTitipan}>
-                  <Text style={styles.badgeTitipanText}>Titipan ({item.supplier_name || 'Tetangga'})</Text>
-                </View>
-              ) : null}
+              <View style={styles.badgeContainerRow}>
+                {item.is_consignment === 1 ? (
+                  <View style={styles.badgeTitipan}>
+                    <Text style={styles.badgeTitipanText}>Titipan ({item.supplier_name || 'Tetangga'})</Text>
+                  </View>
+                ) : null}
+
+                {isKg ? (
+                  <View style={styles.badgeKg}>
+                    <Ionicons name="scale-outline" size={11} color="#047857" />
+                    <Text style={styles.badgeKgText}>Bisa 1/4 kg / Custom</Text>
+                  </View>
+                ) : null}
+              </View>
 
               {item.stock < 5 ? (
                 <View style={styles.badgeLowStock}>
@@ -320,18 +458,20 @@ export default function PosScreen() {
               </Text>
 
               <View style={styles.priceRow}>
-                <Text style={styles.productPrice}>{formatRupiah(item.sell_price)}</Text>
-                <Text style={styles.productStock}>Stok: {item.stock}</Text>
+                <Text style={styles.productPrice}>
+                  {formatRupiah(item.sell_price)} {isKg ? '/ kg' : ''}
+                </Text>
+                <Text style={styles.productStock}>Stok: {item.stock} {isKg ? 'kg' : ''}</Text>
               </View>
 
               {inCartQty > 0 ? (
                 <View style={styles.inCartBadge}>
-                  <Text style={styles.inCartBadgeText}>{inCartQty} di keranjang</Text>
+                  <Text style={styles.inCartBadgeText}>{formatQty(inCartQty, isKg)} di keranjang</Text>
                 </View>
               ) : (
-                <View style={styles.addButton}>
-                  <Ionicons name="add" color="#FFFFFF" size={16} />
-                  <Text style={styles.addButtonText}>Tambah</Text>
+                <View style={[styles.addButton, isKg && styles.addButtonKg]}>
+                  <Ionicons name={isKg ? "scale-outline" : "add"} color="#FFFFFF" size={16} />
+                  <Text style={styles.addButtonText}>{isKg ? "Beli Kg / Porsi" : "Tambah"}</Text>
                 </View>  
               )}
             </TouchableOpacity>
@@ -393,38 +533,62 @@ export default function PosScreen() {
             <ScrollView style={styles.modalBody}>
               {/* Cart Items List */}
               <Text style={styles.sectionTitle}>Daftar Belanja</Text>
-              {cart.map((item) => (
-                <View key={item.product.id} style={styles.cartRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.cartRowTitle}>{item.product.name}</Text>
-                    <Text style={styles.cartRowSub}>
-                      {formatRupiah(item.product.sell_price)} x {item.qty} = {formatRupiah(item.product.sell_price * item.qty)}
-                    </Text>
-                  </View>
+              {cart.map((item) => {
+                const itemIsKg = isKgProduct(item.product);
+                return (
+                  <View key={item.product.id} style={styles.cartRow}>
+                    <TouchableOpacity
+                      style={{ flex: 1 }}
+                      onPress={() => {
+                        if (itemIsKg) {
+                          openWeightModal(item.product, item.qty);
+                        }
+                      }}
+                      activeOpacity={itemIsKg ? 0.7 : 1}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Text style={styles.cartRowTitle}>{item.product.name}</Text>
+                        {itemIsKg ? (
+                          <Ionicons name="create-outline" color={Colors.primary} size={14} />
+                        ) : null}
+                      </View>
+                      <Text style={styles.cartRowSub}>
+                        {formatRupiah(item.product.sell_price)} x {formatQty(item.qty, itemIsKg)} = {formatRupiah(Math.round(item.product.sell_price * item.qty))}
+                      </Text>
+                    </TouchableOpacity>
 
-                  <View style={styles.qtyController}>
-                    <TouchableOpacity
-                      style={styles.qtyBtn}
-                      onPress={() => updateCartQty(item.product.id, -1)}
-                    >
-                      <Ionicons name="remove" color={Colors.text} size={14} />
-                    </TouchableOpacity>
-                    <Text style={styles.qtyText}>{item.qty}</Text>
-                    <TouchableOpacity
-                      style={styles.qtyBtn}
-                      onPress={() => updateCartQty(item.product.id, 1)}
-                    >
-                      <Ionicons name="add" color={Colors.text} size={14} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.qtyBtn, { backgroundColor: Colors.dangerLight, marginLeft: 6 }]}
-                      onPress={() => removeFromCart(item.product.id)}
-                    >
-                      <Ionicons name="trash-outline" color={Colors.danger} size={14} />
-                    </TouchableOpacity>
+                    <View style={styles.qtyController}>
+                      <TouchableOpacity
+                        style={styles.qtyBtn}
+                        onPress={() => updateCartQty(item.product.id, -1)}
+                      >
+                        <Ionicons name="remove" color={Colors.text} size={14} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => {
+                          if (itemIsKg) {
+                            openWeightModal(item.product, item.qty);
+                          }
+                        }}
+                      >
+                        <Text style={styles.qtyText}>{formatQty(item.qty, itemIsKg)}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.qtyBtn}
+                        onPress={() => updateCartQty(item.product.id, 1)}
+                      >
+                        <Ionicons name="add" color={Colors.text} size={14} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.qtyBtn, { backgroundColor: Colors.dangerLight, marginLeft: 6 }]}
+                        onPress={() => removeFromCart(item.product.id)}
+                      >
+                        <Ionicons name="trash-outline" color={Colors.danger} size={14} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                </View>
-              ))}
+                );
+              })}
 
               <View style={styles.divider} />
 
@@ -592,27 +756,31 @@ export default function PosScreen() {
                 </View>
               ) : null}
 
-              {/* Customer Name Form — shown when UTANG or when cash is short */}
+              {/* Customer Name & Phone Form — MANDATORY when UTANG or when cash is short */}
               {isCustomerNameRequired ? (
                 <View style={styles.utangFormContainer}>
-                  <Text style={styles.inputLabel}>
-                    {isCashShort
-                      ? 'Nama Pelanggan (Opsional):'
-                      : 'Nama Pelanggan Utang:'}
-                  </Text>
+                  <View style={styles.utangRequiredHeader}>
+                    <Ionicons name="alert-circle" color={Colors.danger} size={18} />
+                    <Text style={styles.utangRequiredTitle}>Wajib Diisi Untuk Catatan Kasbon / Utang</Text>
+                  </View>
 
-                  <View style={styles.inputWithIcon}>
+                  <Text style={styles.inputLabel}>
+                    Nama Pelanggan (Wajib): <Text style={{ color: Colors.danger }}>*</Text>
+                  </Text>
+                  <View style={[styles.inputWithIcon, !customerName.trim() && styles.inputRequiredBorder]}>
                     <Ionicons name="person-outline" color={Colors.textMuted} size={18} />
                     <TextInput
                       style={styles.iconInput}
-                      placeholder="Nama Pelanggan (Kosongkan: 'Pelanggan Utang')"
+                      placeholder="Masukkan nama pelanggan..."
                       value={customerName}
                       onChangeText={setCustomerName}
                     />
                   </View>
 
-                  <Text style={[styles.inputLabel, { marginTop: 10 }]}>No. HP (Opsional):</Text>
-                  <View style={styles.inputWithIcon}>
+                  <Text style={[styles.inputLabel, { marginTop: 10 }]}>
+                    No. HP / WhatsApp (Wajib): <Text style={{ color: Colors.danger }}>*</Text>
+                  </Text>
+                  <View style={[styles.inputWithIcon, !customerPhone.trim() && styles.inputRequiredBorder]}>
                     <Ionicons name="call-outline" color={Colors.textMuted} size={18} />
                     <TextInput
                       style={styles.iconInput}
@@ -622,6 +790,9 @@ export default function PosScreen() {
                       onChangeText={setCustomerPhone}
                     />
                   </View>
+                  <Text style={styles.utangHelperText}>
+                    * Nomor HP/WA wajib diisi agar tagihan tercatat dan dapat dikirimi pengingat WhatsApp.
+                  </Text>
                 </View>
               ) : null}
             </ScrollView>
@@ -642,6 +813,202 @@ export default function PosScreen() {
               >
                 <Ionicons name="checkmark-circle-outline" color="#FFFFFF" size={22} />
                 <Text style={styles.submitButtonText}>{submitButtonLabel}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Weight Picker Modal for Kg / Custom Weight Products */}
+      <Modal
+        visible={isWeightModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsWeightModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.weightModalContent}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="scale-outline" color={Colors.primaryDark} size={22} />
+                <Text style={styles.modalTitle}>Beli Timbangan / Custom</Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsWeightModalVisible(false)}>
+                <Ionicons name="close" color={Colors.text} size={24} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody}>
+              {selectedKgProduct ? (
+                <View style={styles.weightProductHeader}>
+                  <Text style={styles.weightProductName}>{selectedKgProduct.name}</Text>
+                  <View style={styles.weightProductMeta}>
+                    <Text style={styles.weightProductPrice}>
+                      {formatRupiah(selectedKgProduct.sell_price)} / kg
+                    </Text>
+                    <Text style={styles.weightProductStock}>
+                      Stok: {selectedKgProduct.stock} kg
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+
+              {/* Quick Fraction Buttons */}
+              <Text style={styles.sectionTitle}>Pilih Porsi Timbangan Cepat:</Text>
+              <View style={styles.fractionGrid}>
+                <TouchableOpacity
+                  style={[styles.fractionBtn, selectedWeight === 0.25 && styles.fractionBtnActive]}
+                  onPress={() => handleSelectWeightPreset(0.25)}
+                >
+                  <Text style={[styles.fractionBtnText, selectedWeight === 0.25 && styles.fractionBtnTextActive]}>
+                    1/4 kg
+                  </Text>
+                  <Text style={[styles.fractionBtnSub, selectedWeight === 0.25 && styles.fractionBtnSubActive]}>
+                    0.25 kg
+                  </Text>
+                  {selectedKgProduct ? (
+                    <Text style={[styles.fractionBtnPrice, selectedWeight === 0.25 && styles.fractionBtnPriceActive]}>
+                      {formatRupiah(Math.round(selectedKgProduct.sell_price * 0.25))}
+                    </Text>
+                  ) : null}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.fractionBtn, selectedWeight === 0.5 && styles.fractionBtnActive]}
+                  onPress={() => handleSelectWeightPreset(0.5)}
+                >
+                  <Text style={[styles.fractionBtnText, selectedWeight === 0.5 && styles.fractionBtnTextActive]}>
+                    1/2 kg
+                  </Text>
+                  <Text style={[styles.fractionBtnSub, selectedWeight === 0.5 && styles.fractionBtnSubActive]}>
+                    0.5 kg
+                  </Text>
+                  {selectedKgProduct ? (
+                    <Text style={[styles.fractionBtnPrice, selectedWeight === 0.5 && styles.fractionBtnPriceActive]}>
+                      {formatRupiah(Math.round(selectedKgProduct.sell_price * 0.5))}
+                    </Text>
+                  ) : null}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.fractionBtn, selectedWeight === 0.75 && styles.fractionBtnActive]}
+                  onPress={() => handleSelectWeightPreset(0.75)}
+                >
+                  <Text style={[styles.fractionBtnText, selectedWeight === 0.75 && styles.fractionBtnTextActive]}>
+                    3/4 kg
+                  </Text>
+                  <Text style={[styles.fractionBtnSub, selectedWeight === 0.75 && styles.fractionBtnSubActive]}>
+                    0.75 kg
+                  </Text>
+                  {selectedKgProduct ? (
+                    <Text style={[styles.fractionBtnPrice, selectedWeight === 0.75 && styles.fractionBtnPriceActive]}>
+                      {formatRupiah(Math.round(selectedKgProduct.sell_price * 0.75))}
+                    </Text>
+                  ) : null}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.fractionBtn, selectedWeight === 1 && styles.fractionBtnActive]}
+                  onPress={() => handleSelectWeightPreset(1)}
+                >
+                  <Text style={[styles.fractionBtnText, selectedWeight === 1 && styles.fractionBtnTextActive]}>
+                    1 kg
+                  </Text>
+                  <Text style={[styles.fractionBtnSub, selectedWeight === 1 && styles.fractionBtnSubActive]}>
+                    1.0 kg
+                  </Text>
+                  {selectedKgProduct ? (
+                    <Text style={[styles.fractionBtnPrice, selectedWeight === 1 && styles.fractionBtnPriceActive]}>
+                      {formatRupiah(selectedKgProduct.sell_price)}
+                    </Text>
+                  ) : null}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.fractionBtn, selectedWeight === 2 && styles.fractionBtnActive]}
+                  onPress={() => handleSelectWeightPreset(2)}
+                >
+                  <Text style={[styles.fractionBtnText, selectedWeight === 2 && styles.fractionBtnTextActive]}>
+                    2 kg
+                  </Text>
+                  <Text style={[styles.fractionBtnSub, selectedWeight === 2 && styles.fractionBtnSubActive]}>
+                    2.0 kg
+                  </Text>
+                  {selectedKgProduct ? (
+                    <Text style={[styles.fractionBtnPrice, selectedWeight === 2 && styles.fractionBtnPriceActive]}>
+                      {formatRupiah(selectedKgProduct.sell_price * 2)}
+                    </Text>
+                  ) : null}
+                </TouchableOpacity>
+              </View>
+
+              {/* Custom Weight / Nominal Inputs */}
+              <Text style={styles.sectionTitle}>Atau Masukkan Sesuai Keinginan Pembeli:</Text>
+              
+              <View style={styles.customInputCard}>
+                <Text style={styles.inputLabel}>1. Masukkan Berat Bebas (kg):</Text>
+                <View style={styles.inputWithIcon}>
+                  <Ionicons name="scale-outline" color={Colors.textMuted} size={18} />
+                  <TextInput
+                    style={styles.iconInput}
+                    keyboardType="numeric"
+                    placeholder="Contoh: 0.3 atau 1.5"
+                    value={customWeightInput}
+                    onChangeText={handleCustomWeightChange}
+                  />
+                  <Text style={styles.inputUnit}>kg</Text>
+                </View>
+
+                <Text style={[styles.inputLabel, { marginTop: 12 }]}>2. Atau Beli Seharga (Nominal Rp):</Text>
+                <View style={styles.inputWithIcon}>
+                  <Ionicons name="cash-outline" color={Colors.textMuted} size={18} />
+                  <TextInput
+                    style={styles.iconInput}
+                    keyboardType="numeric"
+                    placeholder="Contoh: Rp 10.000"
+                    value={customMoneyInput}
+                    onChangeText={handleCustomMoneyChange}
+                  />
+                </View>
+                <Text style={styles.inputHintSub}>
+                  * Masukkan jika pembeli bilang misal: &quot;Beli beras Rp 10.000&quot;
+                </Text>
+              </View>
+
+              {/* Calculation Result Preview */}
+              {selectedKgProduct && selectedWeight > 0 ? (
+                <View style={styles.weightSummaryCard}>
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Total Berat:</Text>
+                    <Text style={styles.summaryValue}>{formatQty(selectedWeight, true)}</Text>
+                  </View>
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Harga / kg:</Text>
+                    <Text style={styles.summaryValue}>{formatRupiah(selectedKgProduct.sell_price)}</Text>
+                  </View>
+                  <View style={styles.divider} />
+                  <View style={styles.summaryRow}>
+                    <Text style={[styles.summaryLabel, { fontWeight: 'bold', color: Colors.primaryDark }]}>
+                      Total Tagihan:
+                    </Text>
+                    <Text style={[styles.summaryValue, { fontSize: 18, fontWeight: 'bold', color: Colors.primaryDark }]}>
+                      {formatRupiah(Math.round(selectedKgProduct.sell_price * selectedWeight))}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={[styles.submitButton, styles.submitButtonPrimary, (!selectedWeight || selectedWeight <= 0) && styles.submitButtonDisabled]}
+                onPress={handleSaveWeightToCart}
+                disabled={!selectedWeight || selectedWeight <= 0}
+              >
+                <Ionicons name="cart-outline" color="#FFFFFF" size={20} />
+                <Text style={styles.submitButtonText}>
+                  Simpan ke Keranjang ({selectedWeight > 0 && selectedKgProduct ? formatRupiah(Math.round(selectedKgProduct.sell_price * selectedWeight)) : 'Pilih Berat'})
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1285,5 +1652,177 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: 'bold',
+  },
+  badgeContainerRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginBottom: 4,
+  },
+  badgeKg: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    gap: 3,
+  },
+  badgeKgText: {
+    fontSize: 9,
+    color: '#047857',
+    fontWeight: 'bold',
+  },
+  addButtonKg: {
+    backgroundColor: '#047857',
+  },
+  weightModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '92%',
+    padding: 16,
+  },
+  weightProductHeader: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: 10,
+  },
+  weightProductName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: Colors.text,
+  },
+  weightProductMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  weightProductPrice: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: Colors.primaryDark,
+  },
+  weightProductStock: {
+    fontSize: 12,
+    color: Colors.textMuted,
+  },
+  fractionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  fractionBtn: {
+    width: '30.5%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+  },
+  fractionBtnActive: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#059669',
+  },
+  fractionBtnText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: Colors.text,
+  },
+  fractionBtnTextActive: {
+    color: '#047857',
+  },
+  fractionBtnSub: {
+    fontSize: 10,
+    color: Colors.textMuted,
+    marginTop: 1,
+  },
+  fractionBtnSubActive: {
+    color: '#059669',
+    fontWeight: '600',
+  },
+  fractionBtnPrice: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: Colors.primaryDark,
+    marginTop: 3,
+  },
+  fractionBtnPriceActive: {
+    color: '#047857',
+  },
+  customInputCard: {
+    backgroundColor: '#FAFAFA',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 12,
+    marginBottom: 12,
+  },
+  inputUnit: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: Colors.textSecondary,
+    marginRight: 8,
+  },
+  inputHintSub: {
+    fontSize: 10,
+    color: Colors.textMuted,
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  weightSummaryCard: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 2,
+  },
+  summaryLabel: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  summaryValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  utangRequiredHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#FEE2E2',
+  },
+  utangRequiredTitle: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: Colors.danger,
+  },
+  inputRequiredBorder: {
+    borderColor: '#FECACA',
+    backgroundColor: '#FFF5F5',
+  },
+  utangHelperText: {
+    fontSize: 10,
+    color: Colors.textMuted,
+    marginTop: 6,
+    lineHeight: 14,
   },
 });
