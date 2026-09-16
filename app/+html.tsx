@@ -29,6 +29,10 @@ export default function Root({ children }: { children: ReactNode }) {
 }
 
 const responsiveBackground = `
+@font-face {
+  font-family: 'Ionicons';
+  font-display: swap;
+}
 body {
   background-color: #fff;
 }

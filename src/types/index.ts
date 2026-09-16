@@ -81,6 +81,7 @@ export interface FinancialReportSummary {
   netProfit: number;
   totalConsignmentOwed: number;
   transactionCount: number;
+  totalDebtRemaining?: number;
 }
 
 export interface ShopProfile {

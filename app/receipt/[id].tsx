@@ -166,7 +166,15 @@ export default function ReceiptScreen() {
             {/* Cash paid / Uang Diterima */}
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Uang Diterima</Text>
-              <Text style={styles.detailValue}>{formatRupiah(transaction.total_amount)}</Text>
+              <Text style={styles.detailValue}>
+                {formatRupiah(
+                  transaction.payment_method === 'UTANG' && (!transaction.cash_paid || transaction.cash_paid === 0)
+                    ? 0
+                    : transaction.cash_paid != null
+                    ? transaction.cash_paid
+                    : transaction.total_amount
+                )}
+              </Text>
             </View>
 
             {/* Change — full CASH payment */}

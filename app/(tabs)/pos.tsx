@@ -163,17 +163,6 @@ export default function PosScreen() {
   const handleFinalCheckout = async () => {
     if (cart.length === 0) return;
 
-    // Validate customer name if required
-    if (isCustomerNameRequired && !customerName.trim()) {
-      Alert.alert(
-        'Isi Nama Pelanggan',
-        isCashShort
-          ? `Uang kurang Rp ${shortfallAmount.toLocaleString('id-ID')}. Mohon isi nama pelanggan untuk catatan utang.`
-          : 'Mohon isi nama pelanggan untuk mencatat transaksi kasbon/utang.'
-      );
-      return;
-    }
-
     try {
       setIsSubmitting(true);
       const res = await processCheckout(
@@ -525,7 +514,7 @@ export default function PosScreen() {
                   {/* Info text when short — plain, no banner color */}
                   {isCashShort ? (
                     <Text style={styles.shortfallInfoText}>
-                      Kurang Rp {shortfallAmount.toLocaleString('id-ID')}. Isi nama pelanggan di bawah untuk catat utang.
+                      Uang kurang Rp {shortfallAmount.toLocaleString('id-ID')} akan otomatis dicatat ke Buku Utang.
                     </Text>
                   ) : null}
                 </View>
@@ -569,7 +558,6 @@ export default function PosScreen() {
                     </View>
                   ) : null}
 
-                  {/* If neither QRIS nor Bank is set up */}
                   {!shopProfile?.qris_image_uri && !shopProfile?.bank_account_number ? (
                     <View style={styles.qrisEmptyBox}>
                       <Ionicons name="qr-code-outline" color={Colors.textMuted} size={32} />
@@ -594,7 +582,7 @@ export default function PosScreen() {
                 <View style={styles.utangFormContainer}>
                   <Text style={styles.inputLabel}>
                     {isCashShort
-                      ? 'Nama Pelanggan:'
+                      ? 'Nama Pelanggan (Opsional):'
                       : 'Nama Pelanggan Utang:'}
                   </Text>
 
@@ -602,7 +590,7 @@ export default function PosScreen() {
                     <Ionicons name="person-outline" color={Colors.textMuted} size={18} />
                     <TextInput
                       style={styles.iconInput}
-                      placeholder="Contoh: Pak Budi / Bu Ani"
+                      placeholder="Nama Pelanggan (Kosongkan: 'Pelanggan Utang')"
                       value={customerName}
                       onChangeText={setCustomerName}
                     />

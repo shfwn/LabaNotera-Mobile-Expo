@@ -166,6 +166,63 @@ export default function ReportScreen() {
         </View>
 
 
+        {/* Financial Summary Metric Cards Grid */}
+        <View style={styles.gridContainer}>
+          {/* Row 1: Omset & Modal HPP */}
+          <View style={styles.metricsRow}>
+            {/* Total Omset */}
+            <View style={styles.metricCard}>
+              <View style={styles.metricHeader}>
+                <Text style={styles.metricTitle}>Total Omset</Text>
+                <Ionicons name="arrow-up-circle-outline" color={Colors.success} size={18} />
+              </View>
+              <Text style={styles.metricValue}>
+                {formatRupiah(summary?.totalRevenue || 0)}
+              </Text>
+              <Text style={styles.metricSub}>{summary?.transactionCount || 0} Transaksi</Text>
+            </View>
+
+            {/* Modal HPP Barang */}
+            <View style={styles.metricCard}>
+              <View style={styles.metricHeader}>
+                <Text style={styles.metricTitle}>Modal HPP Barang</Text>
+                <Ionicons name="arrow-down-circle-outline" color={Colors.danger} size={18} />
+              </View>
+              <Text style={[styles.metricValue, { color: Colors.danger }]}>
+                {formatRupiah(summary?.totalHPP || 0)}
+              </Text>
+              <Text style={styles.metricSub}>Modal Pokok</Text>
+            </View>
+          </View>
+
+          {/* Row 2: Laba Kotor & Uang Titipan */}
+          <View style={styles.metricsRow}>
+            {/* Laba Kotor */}
+            <View style={styles.metricCard}>
+              <View style={styles.metricHeader}>
+                <Text style={styles.metricTitle}>Laba Kotor</Text>
+                <Ionicons name="trending-up-outline" color={Colors.primary} size={18} />
+              </View>
+              <Text style={[styles.metricValue, { color: Colors.primaryDark }]}>
+                {formatRupiah(summary?.grossProfit || 0)}
+              </Text>
+              <Text style={styles.metricSub}>Omset - HPP</Text>
+            </View>
+
+            {/* Total Uang Titipan */}
+            <View style={styles.metricCard}>
+              <View style={styles.metricHeader}>
+                <Text style={styles.metricTitle}>Total Uang Titipan</Text>
+                <Ionicons name="people-outline" color={Colors.secondary} size={18} />
+              </View>
+              <Text style={[styles.metricValue, { color: Colors.secondary }]}>
+                {formatRupiah(summary?.totalConsignmentOwed || 0)}
+              </Text>
+              <Text style={styles.metricSub}>Bagi Hasil Titipan</Text>
+            </View>
+          </View>
+        </View>
+
         {/* Recent Transactions List */}
         <Text style={[styles.sectionHeader, { marginTop: 16 }]}>Transaksi Terakhir</Text>
 

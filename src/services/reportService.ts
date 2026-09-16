@@ -40,14 +40,21 @@ export async function getFinancialSummary(db: SQLiteDatabase): Promise<Financial
   // Net Profit
   const netProfit = grossProfit - totalPrive - totalExpense;
 
-  // Consignment Owed calculation (Barang Titipan yang sudah laku terjual)
+  // Consignment Owed calculation (Barang Titipan yang sudah laku terjual dari transaksi SUCCESS)
   const consignmentRes = await db.getFirstAsync<{ total_owed: number | null }>(
     `SELECT SUM(ti.qty * ti.buy_price) as total_owed 
      FROM transaction_items ti
      JOIN products p ON ti.product_id = p.id
-     WHERE p.is_consignment = 1`
+     JOIN transactions t ON ti.transaction_id = t.id
+     WHERE p.is_consignment = 1 AND t.status = 'SUCCESS'`
   );
   const totalConsignmentOwed = consignmentRes?.total_owed || 0;
+
+  // Total Customer Active Debt (Total Piutang Belum Lunas)
+  const debtRes = await db.getFirstAsync<{ total_debt: number | null }>(
+    `SELECT SUM(remaining_debt) as total_debt FROM debts WHERE status != 'PAID'`
+  );
+  const totalDebtRemaining = debtRes?.total_debt || 0;
 
   return {
     totalRevenue,
@@ -58,5 +65,6 @@ export async function getFinancialSummary(db: SQLiteDatabase): Promise<Financial
     netProfit,
     totalConsignmentOwed,
     transactionCount,
+    totalDebtRemaining,
   };
 }

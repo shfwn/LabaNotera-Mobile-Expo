@@ -44,18 +44,24 @@ export async function processCheckout(
     recordedCashReceived = 0; // 0 rupiah diterima
   }
 
+  // Record debt: full UTANG method OR partial CASH payment with shortfall
+  const shouldRecordDebt = paymentMethod === 'UTANG' || isPartialPayment;
+  const debtAmount = paymentMethod === 'UTANG' ? totalAmount : shortfall;
+  const effectiveCustomerName = customerName?.trim() || (shouldRecordDebt ? 'Pelanggan Utang' : null);
+
   // Insert Transaction
   const trxResult = await db.runAsync(
     `INSERT INTO transactions (transaction_code, total_amount, total_cost, payment_method, cash_paid, debt_amount, customer_name, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'SUCCESS')`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       transactionCode,
-      recordedCashReceived,
+      totalAmount,
       totalCost,
       effectivePaymentMethod,
       isPartialPayment || paymentMethod === 'CASH' ? actualCashPaid : 0,
       isPartialPayment ? shortfall : (paymentMethod === 'UTANG' ? totalAmount : 0),
-      customerName || null,
+      effectiveCustomerName,
+      'SUCCESS',
     ]
   );
 
@@ -85,30 +91,26 @@ export async function processCheckout(
     ]);
   }
 
-  // Record debt: full UTANG method OR partial CASH payment with shortfall
-  const shouldRecordDebt = paymentMethod === 'UTANG' || isPartialPayment;
-  const debtAmount = paymentMethod === 'UTANG' ? totalAmount : shortfall;
-
   if (shouldRecordDebt) {
-    const name = customerName?.trim() || 'Pelanggan Utang';
+    const name = effectiveCustomerName || 'Pelanggan Utang';
     // Check if customer already has active debt
     const existingDebt = await db.getFirstAsync<{ id: number; total_debt: number; remaining_debt: number }>(
       `SELECT id, total_debt, remaining_debt FROM debts WHERE LOWER(customer_name) = LOWER(?) AND status != 'PAID'`,
       [name]
     );
 
-    if (existingDebt) {
-      const newTotal = existingDebt.total_debt + debtAmount;
-      const newRemaining = existingDebt.remaining_debt + debtAmount;
+    if (existingDebt && existingDebt.id) {
+      const newTotal = Number(existingDebt.total_debt || 0) + debtAmount;
+      const newRemaining = Number(existingDebt.remaining_debt || 0) + debtAmount;
       await db.runAsync(
-        `UPDATE debts SET total_debt = ?, remaining_debt = ?, status = 'UNPAID' WHERE id = ?`,
-        [newTotal, newRemaining, existingDebt.id]
+        `UPDATE debts SET total_debt = ?, remaining_debt = ?, status = ? WHERE id = ?`,
+        [newTotal, newRemaining, 'UNPAID', existingDebt.id]
       );
     } else {
       await db.runAsync(
         `INSERT INTO debts (customer_name, phone, total_debt, remaining_debt, status)
-         VALUES (?, ?, ?, ?, 'UNPAID')`,
-        [name, customerPhone || null, debtAmount, debtAmount]
+         VALUES (?, ?, ?, ?, ?)`,
+        [name, customerPhone || null, debtAmount, debtAmount, 'UNPAID']
       );
     }
   }

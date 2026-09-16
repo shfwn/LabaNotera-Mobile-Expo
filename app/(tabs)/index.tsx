@@ -128,7 +128,7 @@ export default function DashboardScreen() {
                 <Text style={styles.metricSub}>Omset - HPP</Text>
               </View>
 
-              {/* Utang Titipan Laku */}
+              {/* Total Uang Titipan */}
               <View style={styles.metricCard}>  
                 <View style={styles.metricHeader}>
                   <Text style={styles.metricLabel} numberOfLines={1}>Total Uang Titipan</Text>
@@ -138,6 +138,33 @@ export default function DashboardScreen() {
                   {formatRupiah(summary?.totalConsignmentOwed || 0)}
                 </Text>
                 <Text style={styles.metricSub}>Bagi Hasil Titipan</Text>
+              </View>
+            </View>
+
+            {/* Row 3: Laba Bersih & Piutang Pelanggan */}
+            <View style={styles.metricsRow}>
+              {/* Estimasi Laba Bersih */}
+              <View style={[styles.metricCard, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0', borderWidth: 1 }]}>
+                <View style={styles.metricHeader}>
+                  <Text style={[styles.metricLabel, { color: '#166534' }]} numberOfLines={1}>Laba Bersih</Text>
+                  <Ionicons name="wallet-outline" color={Colors.success} size={18} />
+                </View>
+                <Text style={[styles.metricValue, { color: '#15803D' }]} numberOfLines={1}>
+                  {formatRupiah(summary?.netProfit || 0)}
+                </Text>
+                <Text style={[styles.metricSub, { color: '#166534' }]}>Setelah Prive & Biaya</Text>
+              </View>
+
+              {/* Total Piutang Pelanggan */}
+              <View style={[styles.metricCard, { backgroundColor: '#FFFBEB', borderColor: '#FDE68A', borderWidth: 1 }]}>
+                <View style={styles.metricHeader}>
+                  <Text style={[styles.metricLabel, { color: '#92400E' }]} numberOfLines={1}>Piutang Warung</Text>
+                  <Ionicons name="book-outline" color={Colors.warning} size={18} />
+                </View>
+                <Text style={[styles.metricValue, { color: '#B45309' }]} numberOfLines={1}>
+                  {formatRupiah(summary?.totalDebtRemaining || 0)}
+                </Text>
+                <Text style={[styles.metricSub, { color: '#92400E' }]}>Utang Belum Lunas</Text>
               </View>
             </View>
           </View>

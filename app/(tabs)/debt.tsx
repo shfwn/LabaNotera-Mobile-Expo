@@ -521,10 +521,10 @@ export default function DebtScreen() {
                 <TextInput
                   style={styles.iconInput}
                   keyboardType="numeric"
-                  placeholder="Contoh: 50000"
+                  placeholder="Contoh: 50.000 atau 500"
                   placeholderTextColor={Colors.textMuted}
-                  value={newTotalDebt}
-                  onChangeText={setNewTotalDebt}
+                  value={newTotalDebt ? formatRupiah(newTotalDebt) : ''}
+                  onChangeText={(text) => setNewTotalDebt(formatRupiah(text))}
                 />
               </View>
             </ScrollView>
@@ -570,32 +570,73 @@ export default function DebtScreen() {
                   <TextInput
                     style={styles.iconInput}
                     keyboardType="numeric"
-                    placeholder="Masukkan nominal bayar..."
+                    placeholder="Masukkan nominal bayar (cth: 500, 5000)..."
                     placeholderTextColor={Colors.textMuted}
-                    value={payAmount}
-                    onChangeText={setPayAmount}
+                    value={payAmount ? formatRupiah(payAmount) : ''}
+                    onChangeText={(text) => setPayAmount(formatRupiah(text))}
                   />
                 </View>
 
                 {/* Quick amount buttons */}
-                <View style={styles.quickAmountRow}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickAmountRow}>
                   <TouchableOpacity
                     style={styles.quickAmountBtn}
-                    onPress={() => setPayAmount(selectedDebt.remaining_debt.toString())}
+                    onPress={() => setPayAmount(formatRupiah(selectedDebt.remaining_debt))}
                     activeOpacity={0.7}
                   >
                     <Text style={styles.quickAmountText}>Lunas ({formatRupiah(selectedDebt.remaining_debt)})</Text>
                   </TouchableOpacity>
-                  {selectedDebt.remaining_debt >= 10000 ? (
+
+                  {selectedDebt.remaining_debt >= 500 && (
                     <TouchableOpacity
                       style={styles.quickAmountBtn}
-                      onPress={() => setPayAmount(Math.round(selectedDebt.remaining_debt / 2).toString())}
+                      onPress={() => setPayAmount(formatRupiah(Math.min(500, selectedDebt.remaining_debt)))}
                       activeOpacity={0.7}
                     >
-                      <Text style={styles.quickAmountText}>50% ({formatRupiah(Math.round(selectedDebt.remaining_debt / 2))})</Text>
+                      <Text style={styles.quickAmountText}>Rp 500</Text>
                     </TouchableOpacity>
-                  ) : null}
-                </View>
+                  )}
+
+                  {selectedDebt.remaining_debt >= 1000 && (
+                    <TouchableOpacity
+                      style={styles.quickAmountBtn}
+                      onPress={() => setPayAmount(formatRupiah(Math.min(1000, selectedDebt.remaining_debt)))}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.quickAmountText}>Rp 1.000</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {selectedDebt.remaining_debt >= 2000 && (
+                    <TouchableOpacity
+                      style={styles.quickAmountBtn}
+                      onPress={() => setPayAmount(formatRupiah(Math.min(2000, selectedDebt.remaining_debt)))}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.quickAmountText}>Rp 2.000</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {selectedDebt.remaining_debt >= 5000 && (
+                    <TouchableOpacity
+                      style={styles.quickAmountBtn}
+                      onPress={() => setPayAmount(formatRupiah(Math.min(5000, selectedDebt.remaining_debt)))}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.quickAmountText}>Rp 5.000</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {selectedDebt.remaining_debt >= 10000 && (
+                    <TouchableOpacity
+                      style={styles.quickAmountBtn}
+                      onPress={() => setPayAmount(formatRupiah(Math.min(10000, selectedDebt.remaining_debt)))}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.quickAmountText}>Rp 10.000</Text>
+                    </TouchableOpacity>
+                  )}
+                </ScrollView>
 
                 <Text style={[styles.formLabel, { marginTop: 12 }]}>Catatan / Keterangan (Opsional):</Text>
                 <TextInput

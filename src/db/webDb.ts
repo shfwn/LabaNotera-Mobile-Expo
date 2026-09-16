@@ -61,6 +61,57 @@ class WebSQLiteDatabase {
             ];
           }
 
+          if (this.data.products) {
+            this.data.products.forEach((p) => {
+              p.buy_price = Number(p.buy_price || 0);
+              p.sell_price = Number(p.sell_price || 0);
+              p.stock = Number(p.stock || 0);
+              p.is_consignment = Number(p.is_consignment || 0);
+            });
+          }
+          if (this.data.transactions) {
+            this.data.transactions.forEach((t) => {
+              t.total_amount = Number(t.total_amount || 0);
+              t.total_cost = Number(t.total_cost || 0);
+              if (t.cash_paid != null) t.cash_paid = Number(t.cash_paid);
+              if (t.debt_amount != null) t.debt_amount = Number(t.debt_amount);
+              if (!t.status) t.status = 'SUCCESS';
+            });
+          }
+          if (!this.data.debts) {
+            this.data.debts = [];
+          }
+          this.data.debts.forEach((d) => {
+            d.total_debt = Number(d.total_debt || 0);
+            d.remaining_debt = Number(d.remaining_debt || 0);
+            if (!d.status) d.status = 'UNPAID';
+          });
+
+          // Direct calculation of remaining debt from payment history
+          if (this.data.debts) {
+            this.data.debts.forEach((d) => {
+              const payments = (this.data.debt_payments || []).filter((dp) => dp.debt_id === d.id);
+              const totalPaid = payments.reduce((s, dp) => s + Number(dp.amount_paid || 0), 0);
+
+              d.remaining_debt = Math.max(0, d.total_debt - totalPaid);
+
+              if (d.remaining_debt <= 0) {
+                d.status = 'PAID';
+              } else if (totalPaid > 0) {
+                d.status = 'PARTIAL';
+              } else {
+                d.status = 'UNPAID';
+              }
+            });
+          }
+          if (this.data.transaction_items) {
+            this.data.transaction_items.forEach((ti) => {
+              ti.qty = Number(ti.qty || 0);
+              ti.buy_price = Number(ti.buy_price || 0);
+              ti.sell_price = Number(ti.sell_price || 0);
+              ti.subtotal = Number(ti.subtotal || 0);
+            });
+          }
         }
       }
     } catch (e) {
@@ -165,8 +216,22 @@ class WebSQLiteDatabase {
         id: newId,
         created_at: new Date().toISOString(),
       };
+      const numericCols = new Set([
+        'buy_price', 'sell_price', 'stock', 'is_consignment',
+        'total_amount', 'total_cost', 'cash_paid', 'debt_amount',
+        'total_debt', 'remaining_debt', 'amount_paid', 'amount',
+        'qty', 'subtotal', 'transaction_id', 'product_id', 'debt_id'
+      ]);
+
       cols.forEach((col, idx) => {
-        rowObj[col] = params[idx] !== undefined ? params[idx] : null;
+        let val = params[idx] !== undefined ? params[idx] : null;
+        if (col.toLowerCase() === 'status' && (val === null || val === undefined)) {
+          val = tableName === 'transactions' ? 'SUCCESS' : (tableName === 'debts' ? 'UNPAID' : 'SUCCESS');
+        }
+        if (val !== null && val !== undefined && numericCols.has(col.toLowerCase())) {
+          val = Number(val);
+        }
+        rowObj[col] = val;
       });
 
       this.data[tableName].push(rowObj);
@@ -207,8 +272,10 @@ class WebSQLiteDatabase {
             changes++;
           }
         });
-      } else if (upper.includes('SET TOTAL_DEBT = ?, REMAINING_DEBT = ?, STATUS = ? WHERE ID = ?')) {
-        const [total_debt, remaining_debt, status, id] = params;
+      } else if (upper.includes('SET TOTAL_DEBT =') && upper.includes('REMAINING_DEBT =')) {
+        const [total_debt, remaining_debt] = params;
+        const status = params.length >= 4 ? params[2] : 'UNPAID';
+        const id = params[params.length - 1];
         items.forEach((item) => {
           if (item.id === id) {
             item.total_debt = Number(total_debt);
@@ -232,17 +299,47 @@ class WebSQLiteDatabase {
             changes++;
           }
         });
-      } else if (upper.includes('TOTAL_AMOUNT') && upper.includes('CASH_PAID') && upper.includes('WHERE ID = ?')) {
-        const [total_amount, cash_paid, debt_amount, payment_method, id] = params;
-        items.forEach((item) => {
-          if (item.id === id) {
-            item.total_amount = Number(total_amount);
-            item.cash_paid = Number(cash_paid);
-            item.debt_amount = Number(debt_amount);
-            item.payment_method = payment_method;
-            changes++;
+      } else if (upper.includes('DEBT_AMOUNT') && upper.includes('PAYMENT_METHOD') && upper.includes('WHERE ID = ?')) {
+        if (upper.includes('TOTAL_AMOUNT')) {
+          const [total_amount, cash_paid, debt_amount, payment_method, id] = params;
+          items.forEach((item) => {
+            if (item.id === id) {
+              item.total_amount = Number(total_amount);
+              item.cash_paid = Number(cash_paid);
+              item.debt_amount = Number(debt_amount);
+              item.payment_method = payment_method;
+              changes++;
+            }
+          });
+        } else if (upper.includes('CASH_PAID')) {
+          const [cash_paid, debt_amount, payment_method, id] = params;
+          items.forEach((item) => {
+            if (item.id === id) {
+              item.cash_paid = Number(cash_paid);
+              item.debt_amount = Number(debt_amount);
+              item.payment_method = payment_method;
+              changes++;
+            }
+          });
+        } else {
+          const [debt_amount, payment_method, id] = params;
+          items.forEach((item) => {
+            if (item.id === id) {
+              item.debt_amount = Number(debt_amount);
+              item.payment_method = payment_method;
+              changes++;
+            }
+          });
+        }
+      } else if (upper.includes('SET DEBT_AMOUNT = 0 WHERE')) {
+        const name = (params[0] || '').trim().toLowerCase();
+        (this.data.transactions || []).forEach((t) => {
+          const tName = ((t.customer_name || '').trim() || 'Pelanggan Utang').toLowerCase();
+          if (tName === name) {
+            t.debt_amount = 0;
           }
         });
+        changes++;
       } else if (upper.includes('SET SHOP_NAME = ?')) {
         const [shop_name, owner_name, phone, address, bank_name, bank_account_number, bank_account_holder, qris_image_uri, id] = params;
         items.forEach((item) => {
@@ -299,11 +396,18 @@ class WebSQLiteDatabase {
       return [{ count } as any];
     }
 
-    // SELECT SUM(total_amount)... FROM transactions WHERE status = 'SUCCESS'
-    if (upper.includes('SUM(TOTAL_AMOUNT) AS TOTAL_REVENUE') && upper.includes('FROM TRANSACTIONS')) {
-      const successTrxs = (this.data.transactions || []).filter((t) => t.status === 'SUCCESS');
-      const total_revenue = successTrxs.reduce((sum, t) => sum + (t.total_amount || 0), 0);
-      const total_cost = successTrxs.reduce((sum, t) => sum + (t.total_cost || 0), 0);
+    // SELECT SUM(...) as total_revenue... FROM transactions WHERE status = 'SUCCESS'
+    if (upper.includes('FROM TRANSACTIONS') && (upper.includes('TOTAL_REVENUE') || upper.includes('TOTAL_COST') || upper.includes('COUNT(*) AS TRX_COUNT'))) {
+      const successTrxs = (this.data.transactions || []).filter((t) => !t.status || t.status === 'SUCCESS');
+      const total_revenue = successTrxs.reduce((sum, t) => {
+        const cashPaid = t.cash_paid != null ? Number(t.cash_paid) : 0;
+        const totalAmt = t.total_amount != null ? Number(t.total_amount) : 0;
+        if (t.payment_method === 'UTANG' || t.payment_method === 'CASH+UTANG') {
+          return sum + cashPaid;
+        }
+        return sum + totalAmt;
+      }, 0);
+      const total_cost = successTrxs.reduce((sum, t) => sum + Number(t.total_cost || 0), 0);
       const trx_count = successTrxs.length;
       return [{ total_revenue, total_cost, trx_count } as any];
     }
@@ -311,23 +415,33 @@ class WebSQLiteDatabase {
     // SELECT SUM(amount) as total_prive FROM prive_expenses WHERE type = 'PRIVE'
     if (upper.includes('SUM(AMOUNT) AS TOTAL_PRIVE')) {
       const prives = (this.data.prive_expenses || []).filter((p) => p.type === 'PRIVE');
-      const total_prive = prives.reduce((sum, p) => sum + (p.amount || 0), 0);
+      const total_prive = prives.reduce((sum, p) => sum + Number(p.amount || 0), 0);
       return [{ total_prive } as any];
     }
 
     // SELECT SUM(amount) as total_expense FROM prive_expenses WHERE type = 'EXPENSE'
     if (upper.includes('SUM(AMOUNT) AS TOTAL_EXPENSE')) {
       const expenses = (this.data.prive_expenses || []).filter((p) => p.type === 'EXPENSE');
-      const total_expense = expenses.reduce((sum, p) => sum + (p.amount || 0), 0);
+      const total_expense = expenses.reduce((sum, p) => sum + Number(p.amount || 0), 0);
       return [{ total_expense } as any];
     }
 
     // SELECT SUM(ti.qty * ti.buy_price) as total_owed FROM transaction_items ti JOIN products p ON ti.product_id = p.id WHERE p.is_consignment = 1
     if (upper.includes('TOTAL_OWED') && upper.includes('TRANSACTION_ITEMS')) {
+      const successTrxIds = new Set((this.data.transactions || []).filter((t) => !t.status || t.status === 'SUCCESS').map((t) => t.id));
       const consignmentProducts = new Set((this.data.products || []).filter((p) => p.is_consignment === 1).map((p) => p.id));
-      const consignmentItems = (this.data.transaction_items || []).filter((ti) => consignmentProducts.has(ti.product_id));
-      const total_owed = consignmentItems.reduce((sum, ti) => sum + (ti.qty * ti.buy_price), 0);
+      const consignmentItems = (this.data.transaction_items || []).filter(
+        (ti) => consignmentProducts.has(ti.product_id) && successTrxIds.has(ti.transaction_id)
+      );
+      const total_owed = consignmentItems.reduce((sum, ti) => sum + (Number(ti.qty || 0) * Number(ti.buy_price || 0)), 0);
       return [{ total_owed } as any];
+    }
+
+    // SELECT SUM(remaining_debt) as total_debt FROM debts WHERE status != 'PAID'
+    if (upper.includes('SUM(REMAINING_DEBT)') || upper.includes('SUM(REMAINING_DEBT) AS TOTAL_DEBT')) {
+      const activeDebts = (this.data.debts || []).filter((d) => d.status !== 'PAID');
+      const total_debt = activeDebts.reduce((sum, d) => sum + Number(d.remaining_debt || 0), 0);
+      return [{ total_debt } as any];
     }
 
     // SELECT * FROM products WHERE barcode = ?
@@ -367,12 +481,9 @@ class WebSQLiteDatabase {
       return (this.data.debts || []).filter((d) => d.id === id) as any[];
     }
 
-    // SELECT * FROM debts ORDER BY...
+    // SELECT * FROM debts ORDER BY... (Strictly by creation order, newest first)
     if (upper.includes('FROM DEBTS')) {
-      return [...(this.data.debts || [])].sort((a, b) => {
-        const order = (status: string) => (status === 'UNPAID' ? 1 : status === 'PARTIAL' ? 2 : 3);
-        return order(a.status) - order(b.status) || b.id - a.id;
-      }) as any[];
+      return [...(this.data.debts || [])].sort((a, b) => b.id - a.id) as any[];
     }
 
     // SELECT * FROM debt_payments WHERE id = ?
@@ -394,18 +505,21 @@ class WebSQLiteDatabase {
       return [...(this.data.prive_expenses || [])].sort((a, b) => b.id - a.id) as any[];
     }
 
-    // SELECT * FROM transactions WHERE LOWER(customer_name) = LOWER(?)
-    if (upper.includes('FROM TRANSACTIONS') && upper.includes('CUSTOMER_NAME')) {
-      const name = (params[0] || '').toLowerCase().trim();
-      return (this.data.transactions || [])
-        .filter((t) => (t.customer_name || '').toLowerCase().trim() === name && (t.debt_amount || 0) > 0)
-        .sort((a, b) => a.id - b.id) as any[];
-    }
-
     // SELECT * FROM transactions WHERE id = ?
     if (upper.includes('FROM TRANSACTIONS WHERE ID = ?')) {
       const id = params[0];
       return (this.data.transactions || []).filter((t) => t.id === id) as any[];
+    }
+
+    // SELECT * FROM transactions WHERE LOWER(COALESCE(customer_name, 'Pelanggan Utang')) = LOWER(?)
+    if (upper.includes('FROM TRANSACTIONS') && (upper.includes('CUSTOMER_NAME') || upper.includes('COALESCE'))) {
+      const name = (params[0] || '').toLowerCase().trim();
+      return (this.data.transactions || [])
+        .filter((t) => {
+          const tName = ((t.customer_name || '').trim() || 'Pelanggan Utang').toLowerCase();
+          return tName === name && (t.debt_amount || 0) > 0;
+        })
+        .sort((a, b) => a.id - b.id) as any[];
     }
 
     // SELECT * FROM transactions ORDER BY id DESC LIMIT ?
