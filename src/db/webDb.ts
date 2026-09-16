@@ -112,6 +112,16 @@ class WebSQLiteDatabase {
               ti.subtotal = Number(ti.subtotal || 0);
             });
           }
+
+          Object.keys(this.data).forEach((tableName) => {
+            const tableItems = this.data[tableName] || [];
+            if (tableItems.length > 0) {
+              const maxId = Math.max(...tableItems.map((item: any) => Number(item.id) || 0), 0);
+              if ((this.autoIds[tableName] || 1) <= maxId) {
+                this.autoIds[tableName] = maxId + 1;
+              }
+            }
+          });
         }
       }
     } catch (e) {
@@ -212,9 +222,12 @@ class WebSQLiteDatabase {
       const colMatch = sql.match(/\(([^)]+)\)\s*VALUES/i);
       const cols = colMatch ? colMatch[1].split(',').map((c) => c.trim()) : [];
       const newId = this.autoIds[tableName]++;
+      const nowIso = new Date().toISOString();
       const rowObj: Record<string, any> = {
         id: newId,
-        created_at: new Date().toISOString(),
+        created_at: nowIso,
+        date: nowIso,
+        payment_date: nowIso,
       };
       const numericCols = new Set([
         'buy_price', 'sell_price', 'stock', 'is_consignment', 'is_kg',
@@ -247,34 +260,43 @@ class WebSQLiteDatabase {
       const items = this.data[tableName] || [];
       let changes = 0;
 
-      if (upper.includes('SET STATUS = ? WHERE ID = ?') || (upper.includes('UPDATE TRANSACTIONS') && upper.includes('STATUS ='))) {
+      if (upper.includes('STATUS = ? WHERE ID = ?') || (upper.includes('UPDATE TRANSACTIONS') && upper.includes('STATUS ='))) {
         const [status, id] = params;
         items.forEach((item) => {
-          if (item.id === id) {
+          if (Number(item.id) === Number(id)) {
             item.status = status;
             changes++;
           }
         });
-      } else if (upper.includes('SET STOCK = STOCK + ? WHERE ID = ?')) {
-        const [delta, id] = params;
+      } else if (upper.includes('SET STOCK = STOCK + ?') && upper.includes('BUY_PRICE = ?')) {
+        const [delta, buy_price, id] = params;
         items.forEach((item) => {
-          if (item.id === id) {
-            item.stock = (item.stock || 0) + Number(delta);
+          if (Number(item.id) === Number(id)) {
+            item.stock = (Number(item.stock) || 0) + Number(delta);
+            item.buy_price = Number(buy_price);
             changes++;
           }
         });
-      } else if (upper.includes('SET STOCK = STOCK - ? WHERE ID = ?')) {
+      } else if (upper.includes('SET STOCK = STOCK + ?')) {
         const [delta, id] = params;
         items.forEach((item) => {
-          if (item.id === id) {
-            item.stock = (item.stock || 0) - Number(delta);
+          if (Number(item.id) === Number(id)) {
+            item.stock = (Number(item.stock) || 0) + Number(delta);
+            changes++;
+          }
+        });
+      } else if (upper.includes('SET STOCK = STOCK - ?')) {
+        const [delta, id] = params;
+        items.forEach((item) => {
+          if (Number(item.id) === Number(id)) {
+            item.stock = (Number(item.stock) || 0) - Number(delta);
             changes++;
           }
         });
       } else if (upper.includes('SET REMAINING_DEBT = ?, STATUS = ? WHERE ID = ?')) {
         const [remaining_debt, status, id] = params;
         items.forEach((item) => {
-          if (item.id === id) {
+          if (Number(item.id) === Number(id)) {
             item.remaining_debt = Number(remaining_debt);
             item.status = status;
             changes++;
@@ -285,7 +307,7 @@ class WebSQLiteDatabase {
         const status = params.length >= 4 ? params[2] : 'UNPAID';
         const id = params[params.length - 1];
         items.forEach((item) => {
-          if (item.id === id) {
+          if (Number(item.id) === Number(id)) {
             item.total_debt = Number(total_debt);
             item.remaining_debt = Number(remaining_debt);
             item.status = status;
@@ -297,7 +319,7 @@ class WebSQLiteDatabase {
         const [barcode, name, buy_price, sell_price, stock, is_consignment, supplier_name, category] = params;
         const is_kg = params.length >= 10 ? params[8] : 0;
         items.forEach((item) => {
-          if (item.id === id) {
+          if (Number(item.id) === Number(id)) {
             item.barcode = barcode;
             item.name = name;
             item.buy_price = Number(buy_price);
@@ -314,7 +336,7 @@ class WebSQLiteDatabase {
         if (upper.includes('TOTAL_AMOUNT')) {
           const [total_amount, cash_paid, debt_amount, payment_method, id] = params;
           items.forEach((item) => {
-            if (item.id === id) {
+            if (Number(item.id) === Number(id)) {
               item.total_amount = Number(total_amount);
               item.cash_paid = Number(cash_paid);
               item.debt_amount = Number(debt_amount);
@@ -325,7 +347,7 @@ class WebSQLiteDatabase {
         } else if (upper.includes('CASH_PAID')) {
           const [cash_paid, debt_amount, payment_method, id] = params;
           items.forEach((item) => {
-            if (item.id === id) {
+            if (Number(item.id) === Number(id)) {
               item.cash_paid = Number(cash_paid);
               item.debt_amount = Number(debt_amount);
               item.payment_method = payment_method;
@@ -335,7 +357,7 @@ class WebSQLiteDatabase {
         } else {
           const [debt_amount, payment_method, id] = params;
           items.forEach((item) => {
-            if (item.id === id) {
+            if (Number(item.id) === Number(id)) {
               item.debt_amount = Number(debt_amount);
               item.payment_method = payment_method;
               changes++;
@@ -354,7 +376,7 @@ class WebSQLiteDatabase {
       } else if (upper.includes('SET SHOP_NAME = ?')) {
         const [shop_name, owner_name, phone, address, bank_name, bank_account_number, bank_account_holder, qris_image_uri, id] = params;
         items.forEach((item) => {
-          if (item.id === id || items.length === 1) {
+          if (Number(item.id) === Number(id) || items.length === 1) {
             item.shop_name = shop_name;
             item.owner_name = owner_name;
             item.phone = phone;
@@ -457,6 +479,13 @@ class WebSQLiteDatabase {
       const expenses = (this.data.prive_expenses || []).filter((p) => p.type === 'EXPENSE');
       const total_expense = expenses.reduce((sum, p) => sum + Number(p.amount || 0), 0);
       return [{ total_expense } as any];
+    }
+
+    // SELECT SUM(amount) as total_restock FROM prive_expenses WHERE type = 'RESTOCK'
+    if (upper.includes('SUM(AMOUNT) AS TOTAL_RESTOCK')) {
+      const restocks = (this.data.prive_expenses || []).filter((p) => p.type === 'RESTOCK');
+      const total_restock = restocks.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+      return [{ total_restock } as any];
     }
 
     // SELECT SUM(ti.qty * ti.buy_price) as today_owed / total_owed FROM transaction_items

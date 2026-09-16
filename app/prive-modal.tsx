@@ -178,11 +178,24 @@ export default function PriveModalScreen() {
               <View
                 style={[
                   styles.badge,
-                  item.type === 'PRIVE' ? styles.badgePrive : styles.badgeExpense,
+                  item.type === 'PRIVE'
+                    ? styles.badgePrive
+                    : item.type === 'RESTOCK'
+                    ? styles.badgeRestock
+                    : styles.badgeExpense,
                 ]}
               >
-                <Text style={styles.badgeText}>
-                  {item.type === 'PRIVE' ? 'PRIVE / DAPUR' : 'BIAYA WARUNG'}
+                <Text
+                  style={[
+                    styles.badgeText,
+                    item.type === 'RESTOCK' && { color: '#0369A1' },
+                  ]}
+                >
+                  {item.type === 'PRIVE'
+                    ? 'PRIVE / DAPUR'
+                    : item.type === 'RESTOCK'
+                    ? 'KULAKAN / STOK'
+                    : 'BIAYA WARUNG'}
                 </Text>
               </View>
 
@@ -336,6 +349,9 @@ const styles = StyleSheet.create({
   },
   badgeExpense: {
     backgroundColor: Colors.primaryLight,
+  },
+  badgeRestock: {
+    backgroundColor: '#E0F2FE',
   },
   badgeText: {
     fontSize: 10,

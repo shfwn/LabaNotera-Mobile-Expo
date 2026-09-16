@@ -65,7 +65,7 @@ export async function initDatabase(db: SQLiteDatabase) {
 
       CREATE TABLE IF NOT EXISTS prive_expenses (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        type TEXT CHECK(type IN ('PRIVE', 'EXPENSE')),
+        type TEXT CHECK(type IN ('PRIVE', 'EXPENSE', 'RESTOCK')),
         amount REAL NOT NULL,
         note TEXT NOT NULL,
         date TEXT DEFAULT CURRENT_TIMESTAMP
@@ -90,6 +90,25 @@ export async function initDatabase(db: SQLiteDatabase) {
       await db.execAsync(`ALTER TABLE products ADD COLUMN is_kg INTEGER DEFAULT 0;`);
     } catch (e) {
       // Column already exists
+    }
+
+    // Migration: ensure prive_expenses table supports RESTOCK type
+    try {
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS prive_expenses_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          type TEXT CHECK(type IN ('PRIVE', 'EXPENSE', 'RESTOCK')),
+          amount REAL NOT NULL,
+          note TEXT NOT NULL,
+          date TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT OR IGNORE INTO prive_expenses_new (id, type, amount, note, date)
+        SELECT id, type, amount, note, date FROM prive_expenses;
+        DROP TABLE IF EXISTS prive_expenses;
+        ALTER TABLE prive_expenses_new RENAME TO prive_expenses;
+      `);
+    } catch (e) {
+      // Ignore if table doesn't exist yet or already updated
     }
 
     // Check if shop_profile exists; if not, populate default profile

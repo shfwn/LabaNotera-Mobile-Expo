@@ -73,3 +73,42 @@ export async function updateProductStock(
 ): Promise<void> {
   await db.runAsync('UPDATE products SET stock = stock + ? WHERE id = ?', [delta, id]);
 }
+
+export async function restockProduct(
+  db: SQLiteDatabase,
+  productId: number,
+  qtyToAdd: number,
+  buyPrice: number,
+  paymentSource: 'CASH_DRAWER' | 'CONSIGNMENT' | 'CORRECTION_ONLY',
+  productName: string,
+  isKg: boolean = false
+): Promise<void> {
+  await db.runAsync(
+    'UPDATE products SET stock = stock + ?, buy_price = ? WHERE id = ?',
+    [Number(qtyToAdd), Number(buyPrice), Number(productId)]
+  );
+  if (paymentSource === 'CASH_DRAWER') {
+    const totalCost = Math.round(Number(qtyToAdd) * Number(buyPrice));
+    if (totalCost > 0) {
+      const note = `Kulakan: ${productName} (${qtyToAdd} ${isKg ? 'kg' : 'item'} @ Rp ${buyPrice.toLocaleString('id-ID')})`;
+      try {
+        await db.runAsync(
+          `INSERT INTO prive_expenses (type, amount, note) VALUES (?, ?, ?)`,
+          ['RESTOCK', totalCost, note]
+        );
+      } catch (err) {
+        console.warn('RESTOCK insert in prive_expenses failed, falling back to EXPENSE:', err);
+        try {
+          await db.runAsync(
+            `INSERT INTO prive_expenses (type, amount, note) VALUES (?, ?, ?)`,
+            ['EXPENSE', totalCost, `[KULAKAN] ${note}`]
+          );
+        } catch (err2) {
+          console.error('Fallback insert failed:', err2);
+        }
+      }
+    }
+  }
+}
+
+

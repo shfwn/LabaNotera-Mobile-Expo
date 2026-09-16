@@ -58,11 +58,11 @@ export interface DebtPayment {
   notes?: string | null;
 }
 
-export type ExpenseType = 'PRIVE' | 'EXPENSE';
+export type ExpenseType = 'PRIVE' | 'EXPENSE' | 'RESTOCK';
 
 export interface PriveExpense {
   id: number;
-  type: ExpenseType; // PRIVE: Uang Dapur/Pribadi, EXPENSE: Biaya Operasional Warung
+  type: ExpenseType; // PRIVE: Uang Dapur/Pribadi, EXPENSE: Biaya Operasional, RESTOCK: Belanja Stok/Kulakan
   amount: number;
   note: string;
   date: string;
@@ -79,6 +79,7 @@ export interface FinancialReportSummary {
   grossProfit: number;
   totalPrive: number;
   totalExpense: number;
+  totalRestock?: number;
   netProfit: number;
   totalConsignmentOwed: number;
   transactionCount: number;

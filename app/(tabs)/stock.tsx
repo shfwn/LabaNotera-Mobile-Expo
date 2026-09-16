@@ -23,6 +23,7 @@ import {
   updateProduct,
   deleteProduct,
   updateProductStock,
+  restockProduct,
 } from '../../src/services/productService';
 import { formatRupiah, parseRupiahToNumber, isKgProduct } from '../../src/utils/formatters';
 import { showAppAlert } from '../../src/utils/alertHelper';
@@ -42,6 +43,14 @@ export default function StockScreen() {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
+  // Restock Modal State
+  const [isRestockModalVisible, setIsRestockModalVisible] = useState(false);
+  const [restockProductTarget, setRestockProductTarget] = useState<Product | null>(null);
+  const [restockQty, setRestockQty] = useState('10');
+  const [restockBuyPrice, setRestockBuyPrice] = useState('');
+  const [restockPaymentSource, setRestockPaymentSource] = useState<'CASH_DRAWER' | 'CONSIGNMENT' | 'CORRECTION_ONLY'>('CASH_DRAWER');
+  const [isSubmittingRestock, setIsSubmittingRestock] = useState(false);
+
   // Form Fields
   const [barcode, setBarcode] = useState('');
   const [name, setName] = useState('');
@@ -52,6 +61,7 @@ export default function StockScreen() {
   const [isConsignment, setIsConsignment] = useState(false);
   const [supplierName, setSupplierName] = useState('');
   const [category, setCategory] = useState<'BARANG_POKOK' | 'SNACK' | 'MINUMAN'>('BARANG_POKOK');
+
 
   const loadProducts = useCallback(async () => {
     try {
@@ -148,6 +158,8 @@ export default function StockScreen() {
           category,
           is_kg: isKg ? 1 : 0,
         });
+        setIsModalVisible(false);
+        await loadProducts();
         showAppAlert('Berhasil', 'Data produk berhasil diperbarui.');
       } else {
         await addProduct(db, {
@@ -161,11 +173,10 @@ export default function StockScreen() {
           category,
           is_kg: isKg ? 1 : 0,
         });
+        setIsModalVisible(false);
+        await loadProducts();
         showAppAlert('Berhasil', 'Produk baru berhasil ditambahkan.');
       }
-
-      setIsModalVisible(false);
-      loadProducts();
     } catch (err: any) {
       showAppAlert('Gagal Menyimpan', err.message || 'Terjadi kesalahan saat menyimpan produk.');
     }
@@ -182,6 +193,88 @@ export default function StockScreen() {
           style: 'destructive',
           onPress: async () => {
             await deleteProduct(db, product.id);
+            await loadProducts();
+          },
+        },
+      ]
+    );
+  };
+
+  const openRestockModal = (product: Product) => {
+    setRestockProductTarget(product);
+    setRestockQty(isKgProduct(product) ? '5' : '10');
+    setRestockBuyPrice(formatRupiah(product.buy_price));
+    setRestockPaymentSource(product.is_consignment === 1 ? 'CONSIGNMENT' : 'CASH_DRAWER');
+    setIsRestockModalVisible(true);
+  };
+
+  const handleConfirmRestock = async () => {
+    if (!restockProductTarget) return;
+
+    const qtyNum = parseFloat(restockQty.replace(',', '.')) || 0;
+    if (qtyNum <= 0) {
+      showAppAlert('Jumlah Tidak Valid', 'Jumlah penambahan stok harus lebih dari 0.');
+      return;
+    }
+
+    const buyPriceNum = parseRupiahToNumber(restockBuyPrice);
+    if (buyPriceNum < 0) {
+      showAppAlert('Harga Beli Tidak Valid', 'Harga beli kulakan tidak boleh minus.');
+      return;
+    }
+
+    try {
+      setIsSubmittingRestock(true);
+      await restockProduct(
+        db,
+        restockProductTarget.id,
+        qtyNum,
+        buyPriceNum,
+        restockPaymentSource,
+        restockProductTarget.name,
+        isKgProduct(restockProductTarget)
+      );
+
+      const isKg = isKgProduct(restockProductTarget);
+      const totalCost = Math.round(qtyNum * buyPriceNum);
+      let descMsg = `Stok ${restockProductTarget.name} berhasil ditambah +${qtyNum} ${isKg ? 'kg' : 'item'}.`;
+      if (restockPaymentSource === 'CASH_DRAWER' && totalCost > 0) {
+        descMsg += `\n\nPengeluaran kulakan ${formatRupiah(totalCost)} otomatis dicatat dari laci kasir.`;
+      } else if (restockPaymentSource === 'CONSIGNMENT') {
+        descMsg += `\n\nBarang titipan dicatat (pembayaran ke pemasok dihitung saat barang terjual).`;
+      } else {
+        descMsg += `\n\nPenyesuaian stok opname fisik selesai (tanpa transaksi uang kasir).`;
+      }
+
+      setIsRestockModalVisible(false);
+      setRestockProductTarget(null);
+      await loadProducts();
+      showAppAlert('Stok Berhasil Ditambah', descMsg);
+    } catch (err: any) {
+      showAppAlert('Gagal Tambah Stok', err.message || 'Terjadi kesalahan saat menambah stok.');
+    } finally {
+      setIsSubmittingRestock(false);
+    }
+  };
+
+  const handleQuickStockDecrement = (product: Product) => {
+    if (product.stock <= 0) {
+      showAppAlert('Stok Sudah 0', `Stok "${product.name}" sudah habis (0).`);
+      return;
+    }
+
+    const step = 1;
+    const isKg = isKgProduct(product);
+    showAppAlert(
+      'Kurangi Stok Fisik',
+      `Kurangi stok "${product.name}" sebanyak 1 ${isKg ? 'kg' : 'item'}?\n\n(Catatan: Pengurangan cepat ini hanya untuk koreksi fisik barang rusak/hilang dan tidak mempengaruhi uang kasir).`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Ya, Kurangi',
+          style: 'destructive',
+          onPress: async () => {
+            await updateProductStock(db, product.id, -step);
             loadProducts();
           },
         },
@@ -189,10 +282,6 @@ export default function StockScreen() {
     );
   };
 
-  const handleQuickStockAdjust = async (id: number, delta: number) => {
-    await updateProductStock(db, id, delta);
-    loadProducts();
-  };
 
   const displayedProducts = products.filter((p) => {
     if (activeTab === 'TITIPAN') return p.is_consignment === 1;
@@ -347,7 +436,7 @@ export default function StockScreen() {
                 <View style={styles.stepperContainer}>
                   <TouchableOpacity
                     style={styles.stepperBtn}
-                    onPress={() => handleQuickStockAdjust(item.id, -1)}
+                    onPress={() => handleQuickStockDecrement(item)}
                   >
                     <Text style={styles.stepperBtnText}>-</Text>
                   </TouchableOpacity>
@@ -355,10 +444,10 @@ export default function StockScreen() {
                   <Text style={styles.stepperValue}>{item.stock}</Text>
 
                   <TouchableOpacity
-                    style={styles.stepperBtn}
-                    onPress={() => handleQuickStockAdjust(item.id, 1)}
+                    style={[styles.stepperBtn, styles.stepperBtnPlus]}
+                    onPress={() => openRestockModal(item)}
                   >
-                    <Text style={styles.stepperBtnText}>+</Text>
+                    <Ionicons name="add" color="#FFFFFF" size={16} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -509,6 +598,251 @@ export default function StockScreen() {
 
             <TouchableOpacity style={styles.saveBtn} onPress={handleSaveProduct}>
               <Text style={styles.saveBtnText}>Simpan Produk</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Smart Restock / Kulakan Modal */}
+      <Modal
+        visible={isRestockModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsRestockModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Tambah Stok / Kulakan</Text>
+                <Text style={styles.modalSubTitle}>Kelola stok masuk & pencatatan dana warung</Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsRestockModalVisible(false)}>
+                <Ionicons name="close" color={Colors.text} size={24} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalForm} showsVerticalScrollIndicator={false}>
+              {restockProductTarget ? (
+                <View style={styles.restockProductCard}>
+                  <Text style={styles.restockProductName}>{restockProductTarget.name}</Text>
+                  <View style={styles.restockMetaRow}>
+                    <Text style={styles.restockMetaText}>
+                      Stok saat ini: <Text style={{ fontWeight: 'bold', color: Colors.text }}>{restockProductTarget.stock} {isKgProduct(restockProductTarget) ? 'kg' : 'item'}</Text>
+                    </Text>
+                    <Text style={styles.restockMetaText}>
+                      Harga Jual: <Text style={{ fontWeight: 'bold', color: Colors.primaryDark }}>{formatRupiah(restockProductTarget.sell_price)}</Text>
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+
+              {/* Quantity input & quick chips */}
+              <Text style={styles.formLabel}>
+                Jumlah Stok Masuk ({restockProductTarget && isKgProduct(restockProductTarget) ? 'Kg' : 'Item/Pcs'}):
+              </Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                placeholder="Contoh: 10"
+                value={restockQty}
+                onChangeText={setRestockQty}
+              />
+
+              {/* Quick Qty Chips */}
+              <View style={styles.quickQtyRow}>
+                {(restockProductTarget && isKgProduct(restockProductTarget)
+                  ? ['1', '2', '5', '10', '25', '50']
+                  : ['1', '5', '10', '20', '50', '100']
+                ).map((val) => (
+                  <TouchableOpacity
+                    key={val}
+                    style={[
+                      styles.quickQtyChip,
+                      restockQty === val && styles.quickQtyChipActive,
+                    ]}
+                    onPress={() => setRestockQty(val)}
+                  >
+                    <Text
+                      style={[
+                        styles.quickQtyChipText,
+                        restockQty === val && styles.quickQtyChipTextActive,
+                      ]}
+                    >
+                      +{val} {restockProductTarget && isKgProduct(restockProductTarget) ? 'kg' : ''}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Buy Price / HPP input */}
+              <Text style={[styles.formLabel, { marginTop: 12 }]}>
+                Harga Beli Satuan / HPP Kulakan (Rp):
+              </Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                placeholder="Rp 0"
+                value={restockBuyPrice}
+                onChangeText={(t) => setRestockBuyPrice(formatRupiah(t))}
+              />
+              <Text style={styles.inputHelperText}>
+                Harga beli kulakan per {restockProductTarget && isKgProduct(restockProductTarget) ? 'kg' : 'item'}.
+              </Text>
+
+              {/* Restock Cost Summary */}
+              {(() => {
+                const q = parseFloat(restockQty.replace(',', '.')) || 0;
+                const p = parseRupiahToNumber(restockBuyPrice);
+                const total = Math.round(q * p);
+                return (
+                  <View style={styles.restockSummaryBox}>
+                    <View style={styles.restockSummaryRow}>
+                      <Text style={styles.restockSummaryLabel}>Estimasi Total Biaya Kulakan:</Text>
+                      <Text style={styles.restockSummaryValue}>{formatRupiah(total)}</Text>
+                    </View>
+                    <Text style={styles.restockSummaryFormula}>
+                      ({q} {restockProductTarget && isKgProduct(restockProductTarget) ? 'kg' : 'item'} x {formatRupiah(p)})
+                    </Text>
+                  </View>
+                );
+              })()}
+
+              {/* Payment Source Options */}
+              <Text style={[styles.formLabel, { marginTop: 14, marginBottom: 8 }]}>
+                Sumber Dana / Cara Pembayaran Kulakan:
+              </Text>
+
+              {/* Option 1: Cash Drawer */}
+              <TouchableOpacity
+                style={[
+                  styles.paymentOptionCard,
+                  restockPaymentSource === 'CASH_DRAWER' && styles.paymentOptionCardActive,
+                ]}
+                onPress={() => setRestockPaymentSource('CASH_DRAWER')}
+                activeOpacity={0.8}
+              >
+                <View style={styles.paymentOptionHeader}>
+                  <View style={styles.paymentOptionIconWrap}>
+                    <Ionicons
+                      name="wallet-outline"
+                      size={20}
+                      color={restockPaymentSource === 'CASH_DRAWER' ? Colors.primary : Colors.textMuted}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={[
+                        styles.paymentOptionTitle,
+                        restockPaymentSource === 'CASH_DRAWER' && styles.paymentOptionTitleActive,
+                      ]}
+                    >
+                      Bayar Pakai Uang Laci Kasir Sekarang
+                    </Text>
+                    <Text style={styles.paymentOptionSub}>
+                      Otomatis mencatat pengeluaran kulakan dari kas warung & mengurangi sisa uang fisik di laci kasir.
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.radioCircle,
+                      restockPaymentSource === 'CASH_DRAWER' && styles.radioCircleSelected,
+                    ]}
+                  >
+                    {restockPaymentSource === 'CASH_DRAWER' ? <View style={styles.radioDot} /> : null}
+                  </View>
+                </View>
+              </TouchableOpacity>
+
+              {/* Option 2: Consignment */}
+              <TouchableOpacity
+                style={[
+                  styles.paymentOptionCard,
+                  restockPaymentSource === 'CONSIGNMENT' && styles.paymentOptionCardActive,
+                ]}
+                onPress={() => setRestockPaymentSource('CONSIGNMENT')}
+                activeOpacity={0.8}
+              >
+                <View style={styles.paymentOptionHeader}>
+                  <View style={styles.paymentOptionIconWrap}>
+                    <Ionicons
+                      name="people-outline"
+                      size={20}
+                      color={restockPaymentSource === 'CONSIGNMENT' ? Colors.secondary : Colors.textMuted}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={[
+                        styles.paymentOptionTitle,
+                        restockPaymentSource === 'CONSIGNMENT' && styles.paymentOptionTitleActive,
+                      ]}
+                    >
+                      Barang Titipan / Bayar Nanti Saat Laku
+                    </Text>
+                    <Text style={styles.paymentOptionSub}>
+                      Tidak memotong uang kas sekarang. Pembayaran bagi hasil ke pemasok dihitung nanti saat barang terjual.
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.radioCircle,
+                      restockPaymentSource === 'CONSIGNMENT' && styles.radioCircleSelected,
+                    ]}
+                  >
+                    {restockPaymentSource === 'CONSIGNMENT' ? <View style={styles.radioDot} /> : null}
+                  </View>
+                </View>
+              </TouchableOpacity>
+
+              {/* Option 3: Correction Only */}
+              <TouchableOpacity
+                style={[
+                  styles.paymentOptionCard,
+                  restockPaymentSource === 'CORRECTION_ONLY' && styles.paymentOptionCardActive,
+                ]}
+                onPress={() => setRestockPaymentSource('CORRECTION_ONLY')}
+                activeOpacity={0.8}
+              >
+                <View style={styles.paymentOptionHeader}>
+                  <View style={styles.paymentOptionIconWrap}>
+                    <Ionicons
+                      name="sync-outline"
+                      size={20}
+                      color={restockPaymentSource === 'CORRECTION_ONLY' ? Colors.textSecondary : Colors.textMuted}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={[
+                        styles.paymentOptionTitle,
+                        restockPaymentSource === 'CORRECTION_ONLY' && styles.paymentOptionTitleActive,
+                      ]}
+                    >
+                      Koreksi Fisik Stok Opname Saja
+                    </Text>
+                    <Text style={styles.paymentOptionSub}>
+                      Hanya menyesuaikan jumlah fisik barang tanpa ada transaksi keuangan kasir.
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.radioCircle,
+                      restockPaymentSource === 'CORRECTION_ONLY' && styles.radioCircleSelected,
+                    ]}
+                  >
+                    {restockPaymentSource === 'CORRECTION_ONLY' ? <View style={styles.radioDot} /> : null}
+                  </View>
+                </View>
+              </TouchableOpacity>
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[styles.saveBtn, isSubmittingRestock && { opacity: 0.6 }]}
+              onPress={handleConfirmRestock}
+              disabled={isSubmittingRestock}
+            >
+              <Text style={styles.saveBtnText}>Konfirmasi & Tambah Stok</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -714,6 +1048,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  stepperBtnPlus: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
   stepperBtnText: {
     fontSize: 16,
     fontWeight: 'bold',
@@ -767,6 +1105,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: Colors.text,
   },
+  modalSubTitle: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
   modalForm: {
     marginBottom: 12,
   },
@@ -776,6 +1119,11 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginTop: 10,
     marginBottom: 4,
+  },
+  inputHelperText: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginTop: 3,
   },
   input: {
     borderWidth: 1,
@@ -833,10 +1181,148 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: 'center',
+    marginTop: 8,
   },
   saveBtnText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
   },
+  restockProductCard: {
+    backgroundColor: '#F8FAFC',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: 10,
+  },
+  restockProductName: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: Colors.text,
+  },
+  restockMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  restockMetaText: {
+    fontSize: 12,
+    color: Colors.textMuted,
+  },
+  quickQtyRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+  },
+  quickQtyChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  quickQtyChipActive: {
+    backgroundColor: Colors.primaryLight,
+    borderColor: Colors.primary,
+  },
+  quickQtyChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  quickQtyChipTextActive: {
+    color: Colors.primaryDark,
+    fontWeight: 'bold',
+  },
+  restockSummaryBox: {
+    backgroundColor: '#F0FDF4',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    marginTop: 12,
+  },
+  restockSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  restockSummaryLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#166534',
+  },
+  restockSummaryValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#15803d',
+  },
+  restockSummaryFormula: {
+    fontSize: 11,
+    color: '#15803d',
+    marginTop: 2,
+  },
+  paymentOptionCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+  },
+  paymentOptionCardActive: {
+    borderColor: Colors.primary,
+    backgroundColor: '#F0FDFA',
+  },
+  paymentOptionHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  paymentOptionIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  paymentOptionTitle: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: Colors.text,
+  },
+  paymentOptionTitleActive: {
+    color: Colors.primaryDark,
+  },
+  paymentOptionSub: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    lineHeight: 15,
+    marginTop: 2,
+  },
+  radioCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  radioCircleSelected: {
+    borderColor: Colors.primary,
+  },
+  radioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.primary,
+  },
 });
+

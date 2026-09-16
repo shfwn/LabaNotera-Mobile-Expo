@@ -102,6 +102,10 @@ export default function ReportScreen() {
               <span class="label">Biaya Operasional Warung</span>
               <span class="value" style="color: #dc2626;">-${formatRupiah(summary.totalExpense)}</span>
             </div>
+            <div class="row">
+              <span class="label">Belanja Stok / Kulakan dari Laci Kasir</span>
+              <span class="value" style="color: #2563eb;">-${formatRupiah(summary.totalRestock || 0)}</span>
+            </div>
           </div>
 
           <div class="highlight">
@@ -202,8 +206,15 @@ export default function ReportScreen() {
 
         {/* Breakdown Box: Uang Dapur & Biaya Operasional */}
         <View style={styles.expenseSummaryBox}>
-          <Text style={styles.expenseSummaryTitle}>Pengurangan Laci Kasir (Prive & Biaya)</Text>
+          <Text style={styles.expenseSummaryTitle}>Pengeluaran Kas Laci (Kulakan, Prive & Biaya)</Text>
           
+          <View style={styles.expenseRow}>
+            <Text style={styles.expenseLabel}>Belanja Stok / Kulakan Laci</Text>
+            <Text style={[styles.expenseVal, { color: Colors.primaryDark }]}>
+              -{formatRupiah(summary?.totalRestock || 0)}
+            </Text>
+          </View>
+
           <View style={styles.expenseRow}>
             <Text style={styles.expenseLabel}>Uang Dapur / Prive Pribadi</Text>
             <Text style={[styles.expenseVal, { color: Colors.secondary }]}>
@@ -212,7 +223,7 @@ export default function ReportScreen() {
           </View>
 
           <View style={styles.expenseRow}>
-            <Text style={styles.expenseLabel}> Biaya Operasional Warung</Text>
+            <Text style={styles.expenseLabel}>Biaya Operasional Warung</Text>
             <Text style={styles.expenseVal}>
               -{formatRupiah(summary?.totalExpense || 0)}
             </Text>

@@ -96,6 +96,12 @@ export async function getFinancialSummary(db: SQLiteDatabase): Promise<Financial
   );
   const totalExpense = expenseRes?.total_expense || 0;
 
+  // Total Belanja Stok / Kulakan dari Laci Kasir
+  const restockRes = await db.getFirstAsync<{ total_restock: number | null }>(
+    `SELECT SUM(amount) as total_restock FROM prive_expenses WHERE type = 'RESTOCK'`
+  );
+  const totalRestock = restockRes?.total_restock || 0;
+
   // Net Profit (Laba Bersih Warung = Laba Kotor - Uang Dapur - Biaya Warung)
   const netProfit = grossProfit - totalPrive - totalExpense;
 
@@ -121,9 +127,11 @@ export async function getFinancialSummary(db: SQLiteDatabase): Promise<Financial
     grossProfit,
     totalPrive,
     totalExpense,
+    totalRestock,
     netProfit,
     totalConsignmentOwed,
     transactionCount,
     totalDebtRemaining,
   };
 }
+
