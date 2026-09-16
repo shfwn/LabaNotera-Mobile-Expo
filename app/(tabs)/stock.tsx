@@ -231,7 +231,7 @@ export default function StockScreen() {
           onPress={() => setActiveTab('TITIPAN')}
         >
           <Text style={[styles.tabChipText, activeTab === 'TITIPAN' && styles.tabChipTextActive]}>
-            🤝 Titipan ({products.filter((p) => p.is_consignment === 1).length})
+            Titipan ({products.filter((p) => p.is_consignment === 1).length})
           </Text>
         </TouchableOpacity>
 
@@ -240,7 +240,7 @@ export default function StockScreen() {
           onPress={() => setActiveTab('LOW_STOCK')}
         >
           <Text style={[styles.tabChipText, activeTab === 'LOW_STOCK' && styles.tabChipTextActive]}>
-            ⚠️ Stok Menipis ({products.filter((p) => p.stock < 5).length})
+            Stok Menipis ({products.filter((p) => p.stock < 5).length})
           </Text>
         </TouchableOpacity>
       </View>
