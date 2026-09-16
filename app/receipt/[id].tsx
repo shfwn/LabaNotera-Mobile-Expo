@@ -11,7 +11,7 @@ import {
 import { useAppSQLiteContext as useSQLiteContext } from '../../src/db/AppDatabaseProvider';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Transaction, TransactionItem, ShopProfile } from '../../src/types';
-import { getTransactionDetails } from '../../src/services/posService';
+import { getTransactionDetails, voidTransaction } from '../../src/services/posService';
 import { getShopProfile } from '../../src/services/profileService';
 import { printReceipt, shareReceiptPdf } from '../../src/utils/printHelper';
 import { formatRupiah, formatTanggal, formatQty } from '../../src/utils/formatters';
@@ -71,6 +71,30 @@ export default function ReceiptScreen() {
     }
   };
 
+  const handleVoidTransaction = () => {
+    if (!transaction) return;
+    showAppAlert(
+      'Batalkan Transaksi Ini?',
+      `Apakah Anda yakin ingin membatalkan transaksi "${transaction.transaction_code}"?\n\n• Seluruh barang pada nota ini akan dikembalikan ke stok warung.\n• Total omset & laba kasir otomatis disesuaikan.\n• Catatan utang pelanggan (jika ada) otomatis dihapus.`,
+      [
+        { text: 'Tidak, Kembali', style: 'cancel' },
+        {
+          text: 'Ya, Batalkan Transaksi',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await voidTransaction(db, transaction.id);
+              await loadReceipt();
+              showAppAlert('Transaksi Dibatalkan', 'Transaksi telah berhasil dibatalkan (void) dan stok barang telah dikembalikan.');
+            } catch (err: any) {
+              showAppAlert('Gagal Membatalkan', err.message || 'Terjadi kesalahan saat membatalkan transaksi.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -91,20 +115,36 @@ export default function ReceiptScreen() {
     );
   }
 
+  const isCancelled = transaction.status === 'CANCELLED';
   const displayName = shopProfile?.shop_name?.toUpperCase() || 'WARUNG LABANOTERA';
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Success Banner */}
-        <View style={styles.successBanner}>
-          <Ionicons name="checkmark-circle" color={Colors.success} size={48} />
-          <Text style={styles.successTitle}>Transaksi Berhasil!</Text>
-          <Text style={styles.successSub}>Struk digital siap dicetak atau dibagikan ke WhatsApp</Text>
-        </View>
+        {/* Status Banner */}
+        {isCancelled ? (
+          <View style={styles.cancelledBanner}>
+            <Ionicons name="close-circle" color={Colors.danger} size={48} />
+            <Text style={styles.cancelledTitle}>Transaksi Dibatalkan (Void)</Text>
+            <Text style={styles.cancelledSub}>Nota ini telah dibatalkan dan stok produk telah dikembalikan ke sistem</Text>
+          </View>
+        ) : (
+          <View style={styles.successBanner}>
+            <Ionicons name="checkmark-circle" color={Colors.success} size={48} />
+            <Text style={styles.successTitle}>Transaksi Berhasil!</Text>
+            <Text style={styles.successSub}>Struk digital siap dicetak atau dibagikan ke WhatsApp</Text>
+          </View>
+        )}
 
         {/* Paper Thermal Receipt Mockup */}
         <View style={styles.receiptPaper}>
+          {isCancelled ? (
+            <View style={styles.voidBadgeHeader}>
+              <Ionicons name="alert-circle" color={Colors.danger} size={16} />
+              <Text style={styles.voidBadgeHeaderText}>TRANSAKSI DIBATALKAN / VOID</Text>
+            </View>
+          ) : null}
+
           <View style={styles.receiptHeader}>
             <Ionicons name="storefront-outline" color={Colors.primaryDark} size={28} />
             <Text style={styles.storeTitle}>{displayName}</Text>
@@ -207,9 +247,17 @@ export default function ReceiptScreen() {
               </View>
             ) : null}
 
+            {/* Status if Cancelled / Void */}
+            {isCancelled ? (
+              <View style={[styles.detailRow, { backgroundColor: '#FEE2E2', padding: 6, borderRadius: 6, marginTop: 4 }]}>
+                <Text style={[styles.detailLabel, { color: Colors.danger, fontWeight: 'bold' }]}>Status Nota</Text>
+                <Text style={[styles.detailValue, { color: Colors.danger, fontWeight: 'bold' }]}>DIBATALKAN (VOID)</Text>
+              </View>
+            ) : null}
+
             {/* Status Lunas jika sebelumnya utang lalu sudah lunas */}
-            {((transaction.payment_method === 'CASH+UTANG' || transaction.payment_method === 'UTANG') && (transaction.debt_amount == null || transaction.debt_amount <= 0)) ||
-             (transaction.payment_method === 'CASH' && transaction.customer_name) ? (
+            {!isCancelled && (((transaction.payment_method === 'CASH+UTANG' || transaction.payment_method === 'UTANG') && (transaction.debt_amount == null || transaction.debt_amount <= 0)) ||
+             (transaction.payment_method === 'CASH' && transaction.customer_name)) ? (
               <View style={[styles.detailRow, { backgroundColor: '#f0fdf4', padding: 6, borderRadius: 6, marginTop: 4 }]}>
                 <Text style={[styles.detailLabel, { color: Colors.success, fontWeight: 'bold' }]}>Status Pembayaran</Text>
                 <Text style={[styles.detailValue, { color: Colors.success, fontWeight: 'bold' }]}>LUNAS (Utang Selesai)</Text>
@@ -226,7 +274,9 @@ export default function ReceiptScreen() {
           </View>
 
           <View style={styles.receiptFooter}>
-            <Text style={styles.footerText}>Terima Kasih Atas Kunjungan Anda!</Text>
+            <Text style={styles.footerText}>
+              {isCancelled ? 'Nota ini telah dibatalkan (VOID).' : 'Terima Kasih Atas Kunjungan Anda!'}
+            </Text>
             <Text style={styles.footerSub}>Dicetak via Aplikasi LabaNotera</Text>
           </View>
         </View>
@@ -242,6 +292,13 @@ export default function ReceiptScreen() {
             <Ionicons name="share-social-outline" color={Colors.primaryDark} size={20} />
             <Text style={styles.shareBtnText}>Bagikan PDF / WhatsApp</Text>
           </TouchableOpacity>
+
+          {!isCancelled ? (
+            <TouchableOpacity style={styles.voidBtn} onPress={handleVoidTransaction}>
+              <Ionicons name="close-circle-outline" color={Colors.danger} size={18} />
+              <Text style={styles.voidBtnText}>Batalkan Transaksi (Void)</Text>
+            </TouchableOpacity>
+          ) : null}
 
           <TouchableOpacity style={styles.doneBtn} onPress={() => router.navigate('/(tabs)')}>
             <Ionicons name="arrow-back-outline" color={Colors.textSecondary} size={18} />
@@ -304,6 +361,46 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     marginTop: 2,
     textAlign: 'center',
+  },
+  cancelledBanner: {
+    alignItems: 'center',
+    marginBottom: 16,
+    backgroundColor: '#FEE2E2',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  cancelledTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: Colors.danger,
+    marginTop: 6,
+  },
+  cancelledSub: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  voidBadgeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#FEF2F2',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    marginBottom: 12,
+  },
+  voidBadgeHeaderText: {
+    color: Colors.danger,
+    fontWeight: 'bold',
+    fontSize: 12,
+    letterSpacing: 1,
   },
   receiptPaper: {
     backgroundColor: '#FFFFFF',
@@ -466,6 +563,22 @@ const styles = StyleSheet.create({
   shareBtnText: {
     color: Colors.primaryDark,
     fontSize: 15,
+    fontWeight: 'bold',
+  },
+  voidBtn: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 13,
+    borderRadius: 10,
+    gap: 8,
+  },
+  voidBtnText: {
+    color: Colors.danger,
+    fontSize: 14,
     fontWeight: 'bold',
   },
   doneBtn: {

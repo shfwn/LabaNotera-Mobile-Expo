@@ -148,3 +148,58 @@ export async function getTransactionDetails(
 
   return { transaction, items };
 }
+
+export async function voidTransaction(
+  db: SQLiteDatabase,
+  transactionId: number
+): Promise<void> {
+  const details = await getTransactionDetails(db, transactionId);
+  if (!details) {
+    throw new Error('Transaksi tidak ditemukan');
+  }
+
+  const { transaction, items } = details;
+
+  if (transaction.status === 'CANCELLED') {
+    throw new Error('Transaksi ini sudah dibatalkan sebelumnya.');
+  }
+
+  // 1. Restore product stock for all items in the transaction
+  for (const item of items) {
+    if (item.product_id && item.product_id > 0) {
+      await db.runAsync('UPDATE products SET stock = stock + ? WHERE id = ?', [
+        item.qty,
+        item.product_id,
+      ]);
+    }
+  }
+
+  // 2. Adjust or remove customer debt if this transaction created debt
+  if (
+    (transaction.payment_method === 'UTANG' || transaction.payment_method === 'CASH+UTANG') &&
+    transaction.debt_amount &&
+    transaction.debt_amount > 0
+  ) {
+    const custName = transaction.customer_name?.trim() || 'Pelanggan Utang';
+    const existingDebt = await db.getFirstAsync<{ id: number; total_debt: number; remaining_debt: number }>(
+      `SELECT id, total_debt, remaining_debt FROM debts WHERE LOWER(customer_name) = LOWER(?) AND status != 'PAID'`,
+      [custName]
+    );
+
+    if (existingDebt && existingDebt.id) {
+      const newTotal = Math.max(0, (existingDebt.total_debt || 0) - transaction.debt_amount);
+      const newRemaining = Math.max(0, (existingDebt.remaining_debt || 0) - transaction.debt_amount);
+      const newStatus = newRemaining <= 0 ? 'PAID' : 'UNPAID';
+      await db.runAsync(
+        `UPDATE debts SET total_debt = ?, remaining_debt = ?, status = ? WHERE id = ?`,
+        [newTotal, newRemaining, newStatus, existingDebt.id]
+      );
+    }
+  }
+
+  // 3. Mark transaction as CANCELLED
+  await db.runAsync(`UPDATE transactions SET status = ? WHERE id = ?`, [
+    'CANCELLED',
+    transactionId,
+  ]);
+}

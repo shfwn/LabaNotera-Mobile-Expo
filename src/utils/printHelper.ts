@@ -82,6 +82,7 @@ export function generateReceiptHtml(
       <body>
         <div class="header">
           <div class="store-name">${storeName}</div>
+          ${transaction.status === 'CANCELLED' ? '<div style="color: #dc2626; font-weight: bold; font-size: 13px; margin: 4px 0;">*** TRANSAKSI DIBATALKAN / VOID ***</div>' : ''}
           <div class="meta">Nota Pembayaran POS</div>
           <div class="meta">No: ${transaction.transaction_code}</div>
           <div class="meta">Tgl: ${formatTanggal(transaction.created_at)}</div>

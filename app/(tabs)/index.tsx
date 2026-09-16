@@ -240,18 +240,28 @@ export default function DashboardScreen() {
           {recentTransactions.length > 0 ? (
             recentTransactions.slice(0, 5).map((trx) => {
               const receivedAmount = getTransactionReceivedAmount(trx);
+              const isCancelled = trx.status === 'CANCELLED';
               const hasDebt = trx.payment_method === 'CASH+UTANG' || trx.payment_method === 'UTANG';
               const debtVal = trx.debt_amount || (trx.total_amount - receivedAmount);
 
               return (
                 <TouchableOpacity
                   key={trx.id}
-                  style={styles.trxItemCard}
+                  style={[styles.trxItemCard, isCancelled && { backgroundColor: '#FAFAFA', opacity: 0.85 }]}
                   onPress={() => router.push(`/receipt/${trx.id}`)}
                   activeOpacity={0.7}
                 >
                   <View style={{ flex: 1, marginRight: 8 }}>
-                    <Text style={styles.trxCode}>{trx.transaction_code}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <Text style={[styles.trxCode, isCancelled && { color: Colors.textMuted, textDecorationLine: 'line-through' }]}>
+                        {trx.transaction_code}
+                      </Text>
+                      {isCancelled ? (
+                        <View style={styles.badgeCancelled}>
+                          <Text style={styles.badgeCancelledText}>Dibatalkan</Text>
+                        </View>
+                      ) : null}
+                    </View>
                     <Text style={styles.trxMeta}>
                       {formatTanggal(trx.created_at)} • {trx.payment_method}
                       {trx.customer_name ? ` • ${trx.customer_name}` : ''}
@@ -259,7 +269,16 @@ export default function DashboardScreen() {
                   </View>
                   <View style={styles.trxAmountCol}>
                     <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.trxAmount}>{formatRupiah(receivedAmount)}</Text>
+                      <Text
+                        style={[
+                          styles.trxAmount,
+                          isCancelled
+                            ? { color: Colors.textMuted, textDecorationLine: 'line-through' }
+                            : { color: Colors.primaryDark },
+                        ]}
+                      >
+                        {formatRupiah(receivedAmount)}
+                      </Text>
                     </View>
                     <Ionicons name="chevron-forward" color={Colors.textMuted} size={16} />
                   </View>
@@ -469,6 +488,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     color: Colors.text,
+  },
+  badgeCancelled: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  badgeCancelledText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: Colors.danger,
   },
   trxMeta: {
     fontSize: 11,

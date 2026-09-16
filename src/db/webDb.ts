@@ -247,7 +247,15 @@ class WebSQLiteDatabase {
       const items = this.data[tableName] || [];
       let changes = 0;
 
-      if (upper.includes('SET STOCK = STOCK + ? WHERE ID = ?')) {
+      if (upper.includes('SET STATUS = ? WHERE ID = ?') || (upper.includes('UPDATE TRANSACTIONS') && upper.includes('STATUS ='))) {
+        const [status, id] = params;
+        items.forEach((item) => {
+          if (item.id === id) {
+            item.status = status;
+            changes++;
+          }
+        });
+      } else if (upper.includes('SET STOCK = STOCK + ? WHERE ID = ?')) {
         const [delta, id] = params;
         items.forEach((item) => {
           if (item.id === id) {
