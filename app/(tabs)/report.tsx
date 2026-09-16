@@ -167,11 +167,8 @@ export default function ReportScreen() {
 
         {/* Hero Card: Estimasi Laba Bersih Warung */}
         <View style={styles.heroCard}>
-          <Text style={styles.heroLabel}>ESTIMASI LABA BERSIH WARUNG</Text>
+          <Text style={styles.heroLabel}>Laba Bersih</Text>
           <Text style={styles.heroValue}>{formatRupiah(summary?.netProfit || 0)}</Text>
-          <Text style={styles.heroSub}>
-            Laba Bersih = Omset ({formatRupiah(summary?.totalRevenue || 0)}) - Modal HPP ({formatRupiah(summary?.totalHPP || 0)}) - Uang Dapur & Biaya
-          </Text>
         </View>
 
         {/* Financial Metrics Row: Modal HPP & Total Omset */}
@@ -208,14 +205,14 @@ export default function ReportScreen() {
           <Text style={styles.expenseSummaryTitle}>Pengurangan Laci Kasir (Prive & Biaya)</Text>
           
           <View style={styles.expenseRow}>
-            <Text style={styles.expenseLabel}>🍳 Uang Dapur / Prive Pribadi</Text>
+            <Text style={styles.expenseLabel}>Uang Dapur / Prive Pribadi</Text>
             <Text style={[styles.expenseVal, { color: Colors.secondary }]}>
               -{formatRupiah(summary?.totalPrive || 0)}
             </Text>
           </View>
 
           <View style={styles.expenseRow}>
-            <Text style={styles.expenseLabel}>💡 Biaya Operasional Warung</Text>
+            <Text style={styles.expenseLabel}> Biaya Operasional Warung</Text>
             <Text style={styles.expenseVal}>
               -{formatRupiah(summary?.totalExpense || 0)}
             </Text>
