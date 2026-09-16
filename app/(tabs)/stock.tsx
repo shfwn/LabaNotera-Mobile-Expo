@@ -220,6 +220,7 @@ export default function StockScreen() {
         <TouchableOpacity
           style={[styles.tabChip, activeTab === 'ALL' && styles.tabChipActive]}
           onPress={() => setActiveTab('ALL')}
+          activeOpacity={0.7}
         >
           <Text style={[styles.tabChipText, activeTab === 'ALL' && styles.tabChipTextActive]}>
             Semua ({products.length})
@@ -228,7 +229,8 @@ export default function StockScreen() {
 
         <TouchableOpacity
           style={[styles.tabChip, activeTab === 'TITIPAN' && styles.tabChipActive]}
-          onPress={() => setActiveTab('TITIPAN')}
+          onPress={() => setActiveTab((prev) => (prev === 'TITIPAN' ? 'ALL' : 'TITIPAN'))}
+          activeOpacity={0.7}
         >
           <Text style={[styles.tabChipText, activeTab === 'TITIPAN' && styles.tabChipTextActive]}>
             Titipan ({products.filter((p) => p.is_consignment === 1).length})
@@ -237,7 +239,8 @@ export default function StockScreen() {
 
         <TouchableOpacity
           style={[styles.tabChip, activeTab === 'LOW_STOCK' && styles.tabChipActive]}
-          onPress={() => setActiveTab('LOW_STOCK')}
+          onPress={() => setActiveTab((prev) => (prev === 'LOW_STOCK' ? 'ALL' : 'LOW_STOCK'))}
+          activeOpacity={0.7}
         >
           <Text style={[styles.tabChipText, activeTab === 'LOW_STOCK' && styles.tabChipTextActive]}>
             Stok Menipis ({products.filter((p) => p.stock < 5).length})
@@ -529,23 +532,24 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   tabChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 20,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: Colors.border,
   },
   tabChipActive: {
-    backgroundColor: Colors.primaryLight,
-    borderColor: Colors.primary,
+    backgroundColor: Colors.primaryDark,
+    borderColor: Colors.primaryDark,
   },
   tabChipText: {
     fontSize: 12,
     color: Colors.textSecondary,
+    fontWeight: '500',
   },
   tabChipTextActive: {
-    color: Colors.primaryDark,
+    color: '#FFFFFF',
     fontWeight: 'bold',
   },
   listContent: {

@@ -266,7 +266,7 @@ export default function DebtScreen() {
         >
           <TouchableOpacity
             style={[styles.filterChip, activeTabFilter === 'UNPAID' && styles.filterChipActive]}
-            onPress={() => setActiveTabFilter('UNPAID')}
+            onPress={() => setActiveTabFilter((prev) => (prev === 'UNPAID' ? 'ALL' : 'UNPAID'))}
             activeOpacity={0.7}
           >
             <Text style={[styles.filterChipText, activeTabFilter === 'UNPAID' && styles.filterChipTextActive]}>
@@ -276,7 +276,7 @@ export default function DebtScreen() {
 
           <TouchableOpacity
             style={[styles.filterChip, activeTabFilter === 'PAID' && styles.filterChipActive]}
-            onPress={() => setActiveTabFilter('PAID')}
+            onPress={() => setActiveTabFilter((prev) => (prev === 'PAID' ? 'ALL' : 'PAID'))}
             activeOpacity={0.7}
           >
             <Text style={[styles.filterChipText, activeTabFilter === 'PAID' && styles.filterChipTextActive]}>

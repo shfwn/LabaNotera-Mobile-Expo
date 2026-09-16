@@ -190,6 +190,16 @@ export default function PosScreen() {
     }
   };
 
+  const handleFilterPress = (
+    filter: 'ALL' | 'SNACK' | 'MINUMAN' | 'BARANG_POKOK' | 'TITIPAN'
+  ) => {
+    if (filter === 'ALL') {
+      setSelectedFilter('ALL');
+    } else {
+      setSelectedFilter((prev) => (prev === filter ? 'ALL' : filter));
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header Search & Scanner Bar */}
@@ -227,7 +237,8 @@ export default function PosScreen() {
         >
           <TouchableOpacity
             style={[styles.filterChip, selectedFilter === 'ALL' && styles.filterChipActive]}
-            onPress={() => setSelectedFilter('ALL')}
+            onPress={() => handleFilterPress('ALL')}
+            activeOpacity={0.7}
           >
             <Text style={[styles.filterChipText, selectedFilter === 'ALL' && styles.filterChipTextActive]}>
               Semua Produk
@@ -236,7 +247,8 @@ export default function PosScreen() {
 
           <TouchableOpacity
             style={[styles.filterChip, selectedFilter === 'SNACK' && styles.filterChipActive]}
-            onPress={() => setSelectedFilter('SNACK')}
+            onPress={() => handleFilterPress('SNACK')}
+            activeOpacity={0.7}
           >
             <Text style={[styles.filterChipText, selectedFilter === 'SNACK' && styles.filterChipTextActive]}>
               Snack / Jajanan
@@ -245,7 +257,8 @@ export default function PosScreen() {
 
           <TouchableOpacity
             style={[styles.filterChip, selectedFilter === 'MINUMAN' && styles.filterChipActive]}
-            onPress={() => setSelectedFilter('MINUMAN')}
+            onPress={() => handleFilterPress('MINUMAN')}
+            activeOpacity={0.7}
           >
             <Text style={[styles.filterChipText, selectedFilter === 'MINUMAN' && styles.filterChipTextActive]}>
               Minuman
@@ -254,7 +267,8 @@ export default function PosScreen() {
 
           <TouchableOpacity
             style={[styles.filterChip, selectedFilter === 'BARANG_POKOK' && styles.filterChipActive]}
-            onPress={() => setSelectedFilter('BARANG_POKOK')}
+            onPress={() => handleFilterPress('BARANG_POKOK')}
+            activeOpacity={0.7}
           >
             <Text style={[styles.filterChipText, selectedFilter === 'BARANG_POKOK' && styles.filterChipTextActive]}>
               Barang Pokok
@@ -263,7 +277,8 @@ export default function PosScreen() {
 
           <TouchableOpacity
             style={[styles.filterChip, selectedFilter === 'TITIPAN' && styles.filterChipActive]}
-            onPress={() => setSelectedFilter('TITIPAN')}
+            onPress={() => handleFilterPress('TITIPAN')}
+            activeOpacity={0.7}
           >
             <Text style={[styles.filterChipText, selectedFilter === 'TITIPAN' && styles.filterChipTextActive]}>
               Barang Titipan
@@ -690,23 +705,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 20,
-    backgroundColor: '#FFFFFF ',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: Colors.border,
   },
   filterChipActive: {
-    backgroundColor: Colors.primaryLight,
-    borderColor: Colors.primary,
+    backgroundColor: Colors.primaryDark,
+    borderColor: Colors.primaryDark,
   },
   filterChipText: {
     fontSize: 12,
     color: Colors.textSecondary,
+    fontWeight: '500',
   },
   filterChipTextActive: {
-    color: Colors.primaryDark,
+    color: '#FFFFFF',
     fontWeight: 'bold',
   },
   listContent: {
@@ -983,25 +999,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAFAFA',
   },
   methodCardActive: {
-    backgroundColor: Colors.primaryLight,
-    borderColor: Colors.primary,
+    backgroundColor: Colors.primaryDark,
+    borderColor: Colors.primaryDark,
   },
   methodCardUtangActive: {
-    backgroundColor: Colors.dangerLight,
+    backgroundColor: Colors.danger,
     borderColor: Colors.danger,
   },
   methodText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
     color: Colors.textSecondary,
     textAlign: 'center',
   },
   methodTextActive: {
-    color: Colors.primaryDark,
+    color: '#FFFFFF',
     fontWeight: 'bold',
   },
   methodTextUtangActive: {
-    color: Colors.danger,
+    color: '#FFFFFF',
     fontWeight: 'bold',
   },
   cashCalculatorContainer: {
