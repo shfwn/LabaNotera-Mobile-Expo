@@ -24,7 +24,7 @@ import {
   deleteProduct,
   updateProductStock,
 } from '../../src/services/productService';
-import { formatRupiah } from '../../src/utils/formatters';
+import { formatRupiah, parseRupiahToNumber } from '../../src/utils/formatters';
 import { showAppAlert } from '../../src/utils/alertHelper';
 import { Colors } from '../../src/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -106,8 +106,8 @@ export default function StockScreen() {
     setEditingProduct(product);
     setBarcode(product.barcode || '');
     setName(product.name);
-    setBuyPrice(product.buy_price.toString());
-    setSellPrice(product.sell_price.toString());
+    setBuyPrice(formatRupiah(product.buy_price));
+    setSellPrice(formatRupiah(product.sell_price));
     setStock(product.stock.toString());
     setIsConsignment(product.is_consignment === 1);
     setSupplierName(product.supplier_name || '');
@@ -121,8 +121,8 @@ export default function StockScreen() {
       return;
     }
 
-    const buyPriceNum = parseFloat(buyPrice) || 0;
-    const sellPriceNum = parseFloat(sellPrice) || 0;
+    const buyPriceNum = parseRupiahToNumber(buyPrice);
+    const sellPriceNum = parseRupiahToNumber(sellPrice);
     const stockNum = parseInt(stock, 10) || 0;
 
     if (sellPriceNum <= 0) {
@@ -414,9 +414,9 @@ export default function StockScreen() {
                   <TextInput
                     style={styles.input}
                     keyboardType="numeric"
-                    placeholder="Contoh: 14000"
+                    placeholder="Rp 0"
                     value={buyPrice}
-                    onChangeText={setBuyPrice}
+                    onChangeText={(text) => setBuyPrice(formatRupiah(text))}
                   />
                 </View>
 
@@ -425,9 +425,9 @@ export default function StockScreen() {
                   <TextInput
                     style={styles.input}
                     keyboardType="numeric"
-                    placeholder="Contoh: 17000"
+                    placeholder="Rp 0"
                     value={sellPrice}
-                    onChangeText={setSellPrice}
+                    onChangeText={(text) => setSellPrice(formatRupiah(text))}
                   />
                 </View>
               </View>

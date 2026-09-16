@@ -9,8 +9,8 @@ import {
 } from 'react-native';
 import { useAppSQLiteContext as useSQLiteContext } from '../../src/db/AppDatabaseProvider';
 import { Tabs, useRouter, useFocusEffect } from 'expo-router';
-import { FinancialReportSummary, Transaction, ShopProfile } from '../../src/types';
-import { getFinancialSummary } from '../../src/services/reportService';
+import { DailyFinancialSummary, Transaction, ShopProfile } from '../../src/types';
+import { getDailyFinancialSummary } from '../../src/services/reportService';
 import { getRecentTransactions } from '../../src/services/posService';
 import { getShopProfile } from '../../src/services/profileService';
 import ProfileModal from '../../src/components/ProfileModal';
@@ -23,15 +23,15 @@ export default function DashboardScreen() {
   const db = useSQLiteContext();
   const router = useRouter();
 
-  const [summary, setSummary] = useState<FinancialReportSummary | null>(null);
+  const [dailySummary, setDailySummary] = useState<DailyFinancialSummary | null>(null);
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
   const [profile, setProfile] = useState<ShopProfile | null>(null);
   const [isProfileModalVisible, setIsProfileModalVisible] = useState(false);
 
   const loadDashboardData = useCallback(async () => {
     try {
-      const summaryData = await getFinancialSummary(db);
-      setSummary(summaryData);
+      const summaryData = await getDailyFinancialSummary(db);
+      setDailySummary(summaryData);
 
       const trxs = await getRecentTransactions(db, 5);
       setRecentTransactions(trxs);
@@ -76,95 +76,72 @@ export default function DashboardScreen() {
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Top Financial Metrics Dashboard Section */}
+        {/* Top Financial Metrics Dashboard Section (Daily Summary) */}
         <View style={styles.dashboardHero}>
           {/* Header with Beranda Title & Subtitle */}
           <View style={styles.dashboardHeaderRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.dashboardTitle}>Beranda</Text>
-              <Text style={styles.dashboardSub}>Ringkasan Keuangan & Usaha Warung</Text>
+              <Text style={styles.dashboardSub}>Ringkasan Keuangan & Usaha Warung (Hari Ini)</Text>
+            </View>
+            <View style={styles.todayBadge}>
+              <Ionicons name="today-outline" color="#042F2E" size={12} />
+              <Text style={styles.todayBadgeText}>Hari Ini</Text>
             </View>
           </View>
 
           <View style={styles.metricsContainer}>
             {/* Row 1 */}
             <View style={styles.metricsRow}>
-              {/* Total Omset */}
+              {/* Total Omset Hari Ini */}
               <View style={styles.metricCard}>
                 <View style={styles.metricHeader}>
                   <Text style={styles.metricLabel} numberOfLines={1}>Total Omset</Text>
                   <Ionicons name="arrow-up-circle-outline" color={Colors.success} size={18} />
                 </View>
                 <Text style={styles.metricValue} numberOfLines={1}>
-                  {formatRupiah(summary?.totalRevenue || 0)}
+                  {formatRupiah(dailySummary?.todayRevenue || 0)}
                 </Text>
-                <Text style={styles.metricSub}>{summary?.transactionCount || 0} Transaksi</Text>
+                <Text style={styles.metricSub}>Uang Masuk Hari Ini</Text>
               </View>
 
-              {/* Modal HPP Barang */}
-              <View style={styles.metricCard}>
-                <View style={styles.metricHeader}>
-                  <Text style={styles.metricLabel} numberOfLines={1}>Modal HPP Barang</Text>
-                  <Ionicons name="arrow-down-circle-outline" color={Colors.danger} size={18} />
-                </View>
-                <Text style={[styles.metricValue, { color: Colors.danger }]} numberOfLines={1}>
-                  {formatRupiah(summary?.totalHPP || 0)}
-                </Text>
-                <Text style={styles.metricSub}>Modal Pokok</Text>
-              </View>
-            </View>
-
-            {/* Row 2 */}
-            <View style={styles.metricsRow}>
-              {/* Laba Kotor */}
+              {/* Laba Kotor Hari Ini */}
               <View style={styles.metricCard}>
                 <View style={styles.metricHeader}>
                   <Text style={styles.metricLabel} numberOfLines={1}>Laba Kotor</Text>
                   <Ionicons name="trending-up-outline" color={Colors.primary} size={18} />
                 </View>
                 <Text style={[styles.metricValue, { color: Colors.primaryDark }]} numberOfLines={1}>
-                  {formatRupiah(summary?.grossProfit || 0)}
+                  {formatRupiah(dailySummary?.todayGrossProfit || 0)}
                 </Text>
-                <Text style={styles.metricSub}>Omset - HPP</Text>
+                <Text style={styles.metricSub}>Omset - Modal HPP</Text>
               </View>
+            </View>
 
-              {/* Total Uang Titipan */}
+            {/* Row 2 */}
+            <View style={styles.metricsRow}>
+              {/* Uang Titipan Hari Ini */}
               <View style={styles.metricCard}>  
                 <View style={styles.metricHeader}>
                   <Text style={styles.metricLabel} numberOfLines={1}>Total Uang Titipan</Text>
                   <Ionicons name="people-outline" color={Colors.secondary} size={18} />
                 </View>
                 <Text style={[styles.metricValue, { color: Colors.secondary }]} numberOfLines={1}>
-                  {formatRupiah(summary?.totalConsignmentOwed || 0)}
+                  {formatRupiah(dailySummary?.todayConsignmentOwed || 0)}
                 </Text>
                 <Text style={styles.metricSub}>Bagi Hasil Titipan</Text>
               </View>
-            </View>
 
-            {/* Row 3: Laba Bersih & Piutang Pelanggan */}
-            <View style={styles.metricsRow}>
-              {/* Estimasi Laba Bersih */}
-              <View style={[styles.metricCard, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0', borderWidth: 1 }]}>
+              {/* Total Transaksi Hari Ini */}
+              <View style={styles.metricCard}>
                 <View style={styles.metricHeader}>
-                  <Text style={[styles.metricLabel, { color: '#166534' }]} numberOfLines={1}>Laba Bersih</Text>
-                  <Ionicons name="wallet-outline" color={Colors.success} size={18} />
+                  <Text style={styles.metricLabel} numberOfLines={1}>Total Transaksi</Text>
+                  <Ionicons name="receipt-outline" color={Colors.accent} size={18} />
                 </View>
-                <Text style={[styles.metricValue, { color: '#15803D' }]} numberOfLines={1}>
-                  {formatRupiah(summary?.netProfit || 0)}
+                <Text style={[styles.metricValue, { color: Colors.accent }]} numberOfLines={1}>
+                  {dailySummary?.todayTransactionCount || 0}
                 </Text>
-                <Text style={[styles.metricSub, { color: '#166534' }]}>Setelah Prive & Biaya</Text>
-              </View>
-
-              {/* Total Piutang Pelanggan */}
-              <View style={[styles.metricCard, { backgroundColor: '#FFFBEB', borderColor: '#FDE68A', borderWidth: 1 }]}>
-                <View style={styles.metricHeader}>
-                  <Text style={[styles.metricLabel, { color: '#92400E' }]} numberOfLines={1}>Piutang Warung</Text>
-                  <Ionicons name="book-outline" color={Colors.warning} size={18} />
-                </View>
-                <Text style={[styles.metricValue, { color: '#B45309' }]} numberOfLines={1}>
-                  {formatRupiah(summary?.totalDebtRemaining || 0)}
-                </Text>
-                <Text style={[styles.metricSub, { color: '#92400E' }]}>Utang Belum Lunas</Text>
+                <Text style={styles.metricSub}>Transaksi Hari Ini</Text>
               </View>
             </View>
           </View>
@@ -348,6 +325,20 @@ const styles = StyleSheet.create({
     color: '#CCFBF1',
     fontSize: 12,
     marginTop: 2,
+  },
+  todayBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#5EEAD4',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  todayBadgeText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#042F2E',
   },
   profileHeaderBtn: {
     flexDirection: 'row',

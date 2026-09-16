@@ -389,7 +389,7 @@ export default function DebtScreen() {
                         style={styles.payBtn}
                         onPress={() => {
                           setSelectedDebt(item);
-                          setPayAmount(item.remaining_debt.toString());
+                          setPayAmount(formatRupiah(item.remaining_debt));
                           setIsPayModalVisible(true);
                         }}
                         activeOpacity={0.7}
@@ -517,13 +517,13 @@ export default function DebtScreen() {
 
               <Text style={[styles.formLabel, { marginTop: 12 }]}>Jumlah Kasbon (Rp):</Text>
               <View style={styles.inputWithIcon}>
-                <Text style={styles.currencyPrefix}>Rp</Text>
+                <Ionicons name="cash-outline" color={Colors.textMuted} size={18} />
                 <TextInput
                   style={styles.iconInput}
                   keyboardType="numeric"
-                  placeholder="Contoh: 50.000 atau 500"
+                  placeholder="Rp 0"
                   placeholderTextColor={Colors.textMuted}
-                  value={newTotalDebt ? formatRupiah(newTotalDebt) : ''}
+                  value={newTotalDebt}
                   onChangeText={(text) => setNewTotalDebt(formatRupiah(text))}
                 />
               </View>
@@ -566,13 +566,13 @@ export default function DebtScreen() {
 
                 <Text style={styles.formLabel}>Nominal Pembayaran (Rp):</Text>
                 <View style={styles.inputWithIcon}>
-                  <Text style={styles.currencyPrefix}>Rp</Text>
+                  <Ionicons name="wallet-outline" color={Colors.textMuted} size={18} />
                   <TextInput
                     style={styles.iconInput}
                     keyboardType="numeric"
-                    placeholder="Masukkan nominal bayar (cth: 500, 5000)..."
+                    placeholder="Rp 0"
                     placeholderTextColor={Colors.textMuted}
-                    value={payAmount ? formatRupiah(payAmount) : ''}
+                    value={payAmount}
                     onChangeText={(text) => setPayAmount(formatRupiah(text))}
                   />
                 </View>
@@ -587,13 +587,13 @@ export default function DebtScreen() {
                     <Text style={styles.quickAmountText}>Lunas ({formatRupiah(selectedDebt.remaining_debt)})</Text>
                   </TouchableOpacity>
 
-                  {selectedDebt.remaining_debt >= 500 && (
+                  {selectedDebt.remaining_debt >= 10000 && (
                     <TouchableOpacity
                       style={styles.quickAmountBtn}
-                      onPress={() => setPayAmount(formatRupiah(Math.min(500, selectedDebt.remaining_debt)))}
+                      onPress={() => setPayAmount(formatRupiah(Math.round(selectedDebt.remaining_debt / 2)))}
                       activeOpacity={0.7}
                     >
-                      <Text style={styles.quickAmountText}>Rp 500</Text>
+                      <Text style={styles.quickAmountText}>50% ({formatRupiah(Math.round(selectedDebt.remaining_debt / 2))})</Text>
                     </TouchableOpacity>
                   )}
 

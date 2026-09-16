@@ -84,6 +84,13 @@ export interface FinancialReportSummary {
   totalDebtRemaining?: number;
 }
 
+export interface DailyFinancialSummary {
+  todayRevenue: number;
+  todayGrossProfit: number;
+  todayConsignmentOwed: number;
+  todayTransactionCount: number;
+}
+
 export interface ShopProfile {
   id?: number;
   shop_name: string;

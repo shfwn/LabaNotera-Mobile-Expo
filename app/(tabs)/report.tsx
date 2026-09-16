@@ -142,7 +142,7 @@ export default function ReportScreen() {
         }
       }
     } catch (err: any) {
-      Alert.alert('Gagal Ekspor PDF', err.message || 'Gagal mengekspor laporan PDF.');
+      showAppAlert('Gagal Ekspor PDF', err.message || 'Gagal mengekspor laporan PDF.');
     }
   };
 
@@ -165,6 +165,69 @@ export default function ReportScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Hero Card: Estimasi Laba Bersih Warung */}
+        <View style={styles.heroCard}>
+          <Text style={styles.heroLabel}>ESTIMASI LABA BERSIH WARUNG</Text>
+          <Text style={styles.heroValue}>{formatRupiah(summary?.netProfit || 0)}</Text>
+          <Text style={styles.heroSub}>
+            Laba Bersih = Omset ({formatRupiah(summary?.totalRevenue || 0)}) - Modal HPP ({formatRupiah(summary?.totalHPP || 0)}) - Uang Dapur & Biaya
+          </Text>
+        </View>
+
+        {/* Financial Metrics Row: Modal HPP & Total Omset */}
+        <View style={styles.gridContainer}>
+          <View style={styles.metricsRow}>
+            {/* Modal HPP Barang */}
+            <View style={styles.metricCard}>
+              <View style={styles.metricHeader}>
+                <Text style={styles.metricTitle} numberOfLines={1}>Modal HPP Barang</Text>
+                <Ionicons name="arrow-down-circle-outline" color={Colors.danger} size={18} />
+              </View>
+              <Text style={[styles.metricValue, { color: Colors.danger }]} numberOfLines={1}>
+                {formatRupiah(summary?.totalHPP || 0)}
+              </Text>
+              <Text style={styles.metricSub}>Modal Pokok Terjual</Text>
+            </View>
+
+            {/* Total Omset */}
+            <View style={styles.metricCard}>
+              <View style={styles.metricHeader}>
+                <Text style={styles.metricTitle} numberOfLines={1}>Total Omset</Text>
+                <Ionicons name="arrow-up-circle-outline" color={Colors.success} size={18} />
+              </View>
+              <Text style={[styles.metricValue, { color: Colors.success }]} numberOfLines={1}>
+                {formatRupiah(summary?.totalRevenue || 0)}
+              </Text>
+              <Text style={styles.metricSub}>Total Uang Masuk</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Breakdown Box: Uang Dapur & Biaya Operasional */}
+        <View style={styles.expenseSummaryBox}>
+          <Text style={styles.expenseSummaryTitle}>Pengurangan Laci Kasir (Prive & Biaya)</Text>
+          
+          <View style={styles.expenseRow}>
+            <Text style={styles.expenseLabel}>🍳 Uang Dapur / Prive Pribadi</Text>
+            <Text style={[styles.expenseVal, { color: Colors.secondary }]}>
+              -{formatRupiah(summary?.totalPrive || 0)}
+            </Text>
+          </View>
+
+          <View style={styles.expenseRow}>
+            <Text style={styles.expenseLabel}>💡 Biaya Operasional Warung</Text>
+            <Text style={styles.expenseVal}>
+              -{formatRupiah(summary?.totalExpense || 0)}
+            </Text>
+          </View>
+
+          <View style={[styles.expenseRow, { borderTopWidth: 1, borderTopColor: '#F1F5F9', marginTop: 6, paddingTop: 6 }]}>
+            <Text style={[styles.expenseLabel, { fontWeight: 'bold' }]}>Laba Kotor (Omset - HPP)</Text>
+            <Text style={[styles.expenseVal, { color: Colors.primaryDark }]}>
+              +{formatRupiah(summary?.grossProfit || 0)}
+            </Text>
+          </View>
+        </View>
 
         {/* Financial Summary Metric Cards Grid */}
         <View style={styles.gridContainer}>
@@ -224,7 +287,7 @@ export default function ReportScreen() {
         </View>
 
         {/* Recent Transactions List */}
-        <Text style={[styles.sectionHeader, { marginTop: 16 }]}>Transaksi Terakhir</Text>
+        <Text style={[styles.sectionHeader, { marginTop: 12 }]}>Riwayat Transaksi Kasir</Text>
 
         {recentTransactions.length > 0 ? (
           recentTransactions.map((trx) => {

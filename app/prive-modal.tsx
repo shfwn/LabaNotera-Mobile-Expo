@@ -17,7 +17,8 @@ import {
   addPriveExpense,
   deletePriveExpense,
 } from '../src/services/priveService';
-import { formatRupiah, formatTanggal } from '../src/utils/formatters';
+import { formatRupiah, formatTanggal, parseRupiahToNumber } from '../src/utils/formatters';
+import { showAppAlert } from '../src/utils/alertHelper';
 import { Colors } from '../src/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -45,13 +46,13 @@ export default function PriveModalScreen() {
   }, [loadExpenses]);
 
   const handleSubmit = async () => {
-    const numAmount = parseFloat(amount) || 0;
+    const numAmount = parseRupiahToNumber(amount);
     if (numAmount <= 0) {
-      Alert.alert('Nominal Tidak Valid', 'Mohon masukkan nominal uang yang diambil.');
+      showAppAlert('Nominal Tidak Valid', 'Mohon masukkan nominal uang yang diambil.');
       return;
     }
     if (!note.trim()) {
-      Alert.alert('Keterangan Wajib', 'Mohon isi keterangan (contoh: Belanja dapur, Bayar Listrik).');
+      showAppAlert('Keterangan Wajib', 'Mohon isi keterangan (contoh: Belanja dapur, Bayar Listrik).');
       return;
     }
 
@@ -60,32 +61,40 @@ export default function PriveModalScreen() {
       await addPriveExpense(db, type, numAmount, note.trim());
       setAmount('');
       setNote('');
-      loadExpenses();
-      Alert.alert(
+      await loadExpenses();
+      showAppAlert(
         'Tercatat! 📝',
         type === 'PRIVE'
           ? 'Uang Dapur / Pengambilan Pribadi telah dicatat.'
           : 'Pengeluaran Biaya Operasional Warung telah dicatat.'
       );
     } catch (err: any) {
-      Alert.alert('Gagal', err.message || 'Gagal menyimpan catatan.');
+      showAppAlert('Gagal', err.message || 'Gagal menyimpan catatan.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDelete = (id: number) => {
-    Alert.alert('Hapus Catatan', 'Apakah Anda yakin ingin menghapus catatan pengeluaran ini?', [
-      { text: 'Batal', style: 'cancel' },
-      {
-        text: 'Hapus',
-        style: 'destructive',
-        onPress: async () => {
-          await deletePriveExpense(db, id);
-          loadExpenses();
+    showAppAlert(
+      'Hapus Catatan',
+      'Apakah Anda yakin ingin menghapus catatan pengeluaran ini?',
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Hapus',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deletePriveExpense(db, id);
+              await loadExpenses();
+            } catch (err: any) {
+              showAppAlert('Gagal', err.message || 'Gagal menghapus catatan.');
+            }
+          },
         },
-      },
-    ]);
+      ]
+    );
   };
 
   return (
@@ -127,9 +136,9 @@ export default function PriveModalScreen() {
         <TextInput
           style={styles.input}
           keyboardType="numeric"
-          placeholder="Contoh: 35000"
+          placeholder="Rp 0"
           value={amount}
-          onChangeText={setAmount}
+          onChangeText={(text) => setAmount(formatRupiah(text))}
         />
 
         <Text style={[styles.formLabel, { marginTop: 10 }]}>Keterangan Pengambilan:</Text>

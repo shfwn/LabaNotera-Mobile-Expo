@@ -369,14 +369,14 @@ class WebSQLiteDatabase {
       const initialLen = (this.data[tableName] || []).length;
 
       if (upper.includes('WHERE DEBT_ID = ?')) {
-        const debtIdParam = params[0];
-        this.data[tableName] = (this.data[tableName] || []).filter((item) => item.debt_id !== debtIdParam);
+        const debtIdParam = Number(params[0]) || params[0];
+        this.data[tableName] = (this.data[tableName] || []).filter((item) => Number(item.debt_id) !== Number(debtIdParam));
       } else if (upper.includes('WHERE TRANSACTION_ID = ?')) {
-        const trxIdParam = params[0];
-        this.data[tableName] = (this.data[tableName] || []).filter((item) => item.transaction_id !== trxIdParam);
+        const trxIdParam = Number(params[0]) || params[0];
+        this.data[tableName] = (this.data[tableName] || []).filter((item) => Number(item.transaction_id) !== Number(trxIdParam));
       } else {
-        const idParam = params[0];
-        this.data[tableName] = (this.data[tableName] || []).filter((item) => item.id !== idParam);
+        const idParam = Number(params[0]) || params[0];
+        this.data[tableName] = (this.data[tableName] || []).filter((item) => Number(item.id) !== Number(idParam));
       }
 
       const changes = initialLen - this.data[tableName].length;
@@ -396,8 +396,30 @@ class WebSQLiteDatabase {
       return [{ count } as any];
     }
 
-    // SELECT SUM(...) as total_revenue... FROM transactions WHERE status = 'SUCCESS'
-    if (upper.includes('FROM TRANSACTIONS') && (upper.includes('TOTAL_REVENUE') || upper.includes('TOTAL_COST') || upper.includes('COUNT(*) AS TRX_COUNT'))) {
+    // Daily revenue & cost (HPP): SELECT SUM(...) as today_revenue, SUM(total_cost) as today_cost
+    if (upper.includes('TODAY_REVENUE')) {
+      const dateParam = (params[0] || '').replace(/%/g, '').slice(0, 10);
+      const successTrxs = (this.data.transactions || []).filter((t) => {
+        if (t.status && t.status !== 'SUCCESS') return false;
+        if (!dateParam) return true;
+        const trxDate = (t.created_at || '').slice(0, 10);
+        return trxDate === dateParam || !t.created_at;
+      });
+      const today_revenue = successTrxs.reduce((sum, t) => {
+        const cashPaid = t.cash_paid != null ? Number(t.cash_paid) : 0;
+        const totalAmt = t.total_amount != null ? Number(t.total_amount) : 0;
+        if (t.payment_method === 'UTANG' || t.payment_method === 'CASH+UTANG') {
+          return sum + cashPaid;
+        }
+        return sum + totalAmt;
+      }, 0);
+      const today_cost = successTrxs.reduce((sum, t) => sum + Number(t.total_cost || 0), 0);
+      const trx_count = successTrxs.length;
+      return [{ today_revenue, today_cost, trx_count } as any];
+    }
+
+    // Total revenue & cost (HPP): SELECT SUM(...) as total_revenue
+    if (upper.includes('TOTAL_REVENUE') || (upper.includes('FROM TRANSACTIONS') && (upper.includes('TOTAL_COST') || upper.includes('COUNT(*) AS TRX_COUNT')))) {
       const successTrxs = (this.data.transactions || []).filter((t) => !t.status || t.status === 'SUCCESS');
       const total_revenue = successTrxs.reduce((sum, t) => {
         const cashPaid = t.cash_paid != null ? Number(t.cash_paid) : 0;
@@ -426,15 +448,28 @@ class WebSQLiteDatabase {
       return [{ total_expense } as any];
     }
 
-    // SELECT SUM(ti.qty * ti.buy_price) as total_owed FROM transaction_items ti JOIN products p ON ti.product_id = p.id WHERE p.is_consignment = 1
-    if (upper.includes('TOTAL_OWED') && upper.includes('TRANSACTION_ITEMS')) {
-      const successTrxIds = new Set((this.data.transactions || []).filter((t) => !t.status || t.status === 'SUCCESS').map((t) => t.id));
+    // SELECT SUM(ti.qty * ti.buy_price) as today_owed / total_owed FROM transaction_items
+    if (upper.includes('TODAY_OWED') || (upper.includes('TOTAL_OWED') && upper.includes('TRANSACTION_ITEMS'))) {
       const consignmentProducts = new Set((this.data.products || []).filter((p) => p.is_consignment === 1).map((p) => p.id));
+      const dateParam = (params[0] || '').replace(/%/g, '').slice(0, 10);
+      const successTrxIds = new Set(
+        (this.data.transactions || [])
+          .filter((t) => {
+            if (t.status && t.status !== 'SUCCESS') return false;
+            if (upper.includes('TODAY_OWED') && dateParam) {
+              const trxDate = (t.created_at || '').slice(0, 10);
+              return trxDate === dateParam || !t.created_at;
+            }
+            return true;
+          })
+          .map((t) => t.id)
+      );
+
       const consignmentItems = (this.data.transaction_items || []).filter(
         (ti) => consignmentProducts.has(ti.product_id) && successTrxIds.has(ti.transaction_id)
       );
-      const total_owed = consignmentItems.reduce((sum, ti) => sum + (Number(ti.qty || 0) * Number(ti.buy_price || 0)), 0);
-      return [{ total_owed } as any];
+      const owed = consignmentItems.reduce((sum, ti) => sum + (Number(ti.qty || 0) * Number(ti.buy_price || 0)), 0);
+      return upper.includes('TODAY_OWED') ? ([{ today_owed: owed } as any]) : ([{ total_owed: owed } as any]);
     }
 
     // SELECT SUM(remaining_debt) as total_debt FROM debts WHERE status != 'PAID'
