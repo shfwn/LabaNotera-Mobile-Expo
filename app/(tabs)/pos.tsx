@@ -7,7 +7,6 @@ import {
   FlatList,
   TextInput,
   Modal,
-  Alert,
   ScrollView,
   SafeAreaView,
   Image,
@@ -20,6 +19,7 @@ import { processCheckout } from '../../src/services/posService';
 import { getShopProfile } from '../../src/services/profileService';
 import ProfileModal from '../../src/components/ProfileModal';
 import { formatRupiah, parseRupiahToNumber, getProductCategory, isKgProduct, formatQty } from '../../src/utils/formatters';
+import { showAppAlert } from '../../src/utils/alertHelper';
 import { getShadowStyle } from '../../src/utils/styleHelper';
 import { Colors } from '../../src/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -96,7 +96,7 @@ export default function PosScreen() {
   // Cart operations
   const addToCart = (product: Product, qtyToAdd: number = 1) => {
     if (product.stock <= 0) {
-      Alert.alert('Stok Habis', `Stok ${product.name} telah habis!`);
+      showAppAlert('Stok Habis', `Stok ${product.name} telah habis!`);
       return;
     }
 
@@ -105,7 +105,7 @@ export default function PosScreen() {
       if (existing) {
         const newTotal = existing.qty + qtyToAdd;
         if (newTotal > product.stock) {
-          Alert.alert('Batas Stok', `Jumlah di keranjang melebihi stok yang ada (${product.stock}).`);
+          showAppAlert('Batas Stok', `Jumlah di keranjang melebihi stok yang ada (${product.stock}).`);
           return prev;
         }
         return prev.map((item) =>
@@ -118,7 +118,7 @@ export default function PosScreen() {
 
   const openWeightModal = (product: Product, initialQty?: number) => {
     if (product.stock <= 0) {
-      Alert.alert('Stok Habis', `Stok ${product.name} telah habis!`);
+      showAppAlert('Stok Habis', `Stok ${product.name} telah habis!`);
       return;
     }
     const existing = cart.find((item) => item.product.id === product.id);
@@ -132,7 +132,7 @@ export default function PosScreen() {
 
   const handleProductPress = (product: Product) => {
     if (product.stock <= 0) {
-      Alert.alert('Stok Habis', `Stok ${product.name} telah habis!`);
+      showAppAlert('Stok Habis', `Stok ${product.name} telah habis!`);
       return;
     }
 
@@ -180,11 +180,11 @@ export default function PosScreen() {
 
   const handleSaveWeightToCart = () => {
     if (!selectedKgProduct || selectedWeight <= 0) {
-      Alert.alert('Jumlah Tidak Valid', 'Mohon pilih atau masukkan berat / nominal pembelian yang valid.');
+      showAppAlert('Jumlah Tidak Valid', 'Mohon pilih atau masukkan berat / nominal pembelian yang valid.');
       return;
     }
     if (selectedWeight > selectedKgProduct.stock) {
-      Alert.alert(
+      showAppAlert(
         'Batas Stok',
         `Jumlah pembelian (${formatQty(selectedWeight, true)}) melebihi stok yang tersedia (${selectedKgProduct.stock} kg).`
       );
@@ -225,7 +225,7 @@ export default function PosScreen() {
             }
             const newQty = Number((item.qty + step).toFixed(2));
             if (newQty > item.product.stock) {
-              Alert.alert('Batas Stok', `Stok maksimum ${item.product.stock}`);
+              showAppAlert('Batas Stok', `Stok maksimum ${item.product.stock}`);
               return item;
             }
             return newQty > 0 ? { ...item, qty: newQty } : null;
@@ -276,14 +276,14 @@ export default function PosScreen() {
     // Strict validation for debt transactions: BOTH Name AND Phone are mandatory
     if (isCustomerNameRequired) {
       if (!customerName.trim()) {
-        Alert.alert(
+        showAppAlert(
           'Nama Pelanggan Wajib Diisi',
           'Mohon masukkan nama pelanggan untuk mencatat transaksi utang / kasbon.'
         );
         return;
       }
       if (!customerPhone.trim()) {
-        Alert.alert(
+        showAppAlert(
           'Nomor HP Wajib Diisi',
           'Mohon masukkan nomor HP / WhatsApp pelanggan untuk catatan utang agar dapat dihubungi atau diingatkan via WA.'
         );
@@ -312,7 +312,7 @@ export default function PosScreen() {
       // Navigate to receipt
       router.push(`/receipt/${res.transactionId}`);
     } catch (err: any) {
-      Alert.alert('Gagal Transaksi', err.message || 'Terjadi kesalahan saat memproses checkout.');
+      showAppAlert('Gagal Transaksi', err.message || 'Terjadi kesalahan saat memproses checkout.');
     } finally {
       setIsSubmitting(false);
     }

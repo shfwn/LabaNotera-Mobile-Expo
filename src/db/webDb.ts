@@ -217,7 +217,7 @@ class WebSQLiteDatabase {
         created_at: new Date().toISOString(),
       };
       const numericCols = new Set([
-        'buy_price', 'sell_price', 'stock', 'is_consignment',
+        'buy_price', 'sell_price', 'stock', 'is_consignment', 'is_kg',
         'total_amount', 'total_cost', 'cash_paid', 'debt_amount',
         'total_debt', 'remaining_debt', 'amount_paid', 'amount',
         'qty', 'subtotal', 'transaction_id', 'product_id', 'debt_id'
@@ -285,7 +285,9 @@ class WebSQLiteDatabase {
           }
         });
       } else if (upper.includes('SET BARCODE = ?')) {
-        const [barcode, name, buy_price, sell_price, stock, is_consignment, supplier_name, category, id] = params;
+        const id = params[params.length - 1];
+        const [barcode, name, buy_price, sell_price, stock, is_consignment, supplier_name, category] = params;
+        const is_kg = params.length >= 10 ? params[8] : 0;
         items.forEach((item) => {
           if (item.id === id) {
             item.barcode = barcode;
@@ -296,6 +298,7 @@ class WebSQLiteDatabase {
             item.is_consignment = is_consignment;
             item.supplier_name = supplier_name;
             item.category = category;
+            item.is_kg = is_kg;
             changes++;
           }
         });

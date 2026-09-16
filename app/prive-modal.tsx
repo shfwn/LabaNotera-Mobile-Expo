@@ -63,7 +63,7 @@ export default function PriveModalScreen() {
       setNote('');
       await loadExpenses();
       showAppAlert(
-        'Tercatat! 📝',
+        'Tercatat',
         type === 'PRIVE'
           ? 'Uang Dapur / Pengambilan Pribadi telah dicatat.'
           : 'Pengeluaran Biaya Operasional Warung telah dicatat.'
@@ -110,7 +110,7 @@ export default function PriveModalScreen() {
           >
             <Ionicons name="cart-outline" color={type === 'PRIVE' ? '#FFFFFF' : Colors.secondary} size={18} />
             <Text style={[styles.typeBtnText, type === 'PRIVE' && styles.typeBtnTextActive]}>
-              🍳 Uang Dapur (Prive)
+              Uang Dapur (Prive)
             </Text>
           </TouchableOpacity>
 
@@ -120,7 +120,7 @@ export default function PriveModalScreen() {
           >
             <Ionicons name="flash-outline" color={type === 'EXPENSE' ? '#FFFFFF' : Colors.primaryDark} size={18} />
             <Text style={[styles.typeBtnText, type === 'EXPENSE' && styles.typeBtnTextActive]}>
-              💡 Biaya Warung
+              Biaya Warung
             </Text>
           </TouchableOpacity>
         </View>
@@ -182,7 +182,7 @@ export default function PriveModalScreen() {
                 ]}
               >
                 <Text style={styles.badgeText}>
-                  {item.type === 'PRIVE' ? '🍳 PRIVE / DAPUR' : '💡 BIAYA WARUNG'}
+                  {item.type === 'PRIVE' ? 'PRIVE / DAPUR' : 'BIAYA WARUNG'}
                 </Text>
               </View>
 

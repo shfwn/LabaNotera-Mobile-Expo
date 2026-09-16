@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
   View,
   TouchableOpacity,
   ScrollView,
-  Alert,
   SafeAreaView,
   ActivityIndicator,
 } from 'react-native';
@@ -16,6 +15,7 @@ import { getTransactionDetails } from '../../src/services/posService';
 import { getShopProfile } from '../../src/services/profileService';
 import { printReceipt, shareReceiptPdf } from '../../src/utils/printHelper';
 import { formatRupiah, formatTanggal, formatQty } from '../../src/utils/formatters';
+import { showAppAlert } from '../../src/utils/alertHelper';
 import { getShadowStyle } from '../../src/utils/styleHelper';
 import { Colors } from '../../src/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -58,7 +58,7 @@ export default function ReceiptScreen() {
     try {
       await printReceipt(transaction, items, shopProfile?.shop_name);
     } catch (err: any) {
-      Alert.alert('Gagal Cetak', err.message || 'Terjadi kesalahan saat mencetak.');
+      showAppAlert('Gagal Cetak', err.message || 'Terjadi kesalahan saat mencetak.');
     }
   };
 
@@ -67,7 +67,7 @@ export default function ReceiptScreen() {
     try {
       await shareReceiptPdf(transaction, items, shopProfile?.shop_name);
     } catch (err: any) {
-      Alert.alert('Gagal Bagikan Struk', err.message || 'Terjadi kesalahan saat membagikan PDF.');
+      showAppAlert('Gagal Bagikan Struk', err.message || 'Terjadi kesalahan saat membagikan PDF.');
     }
   };
 
@@ -226,7 +226,7 @@ export default function ReceiptScreen() {
           </View>
 
           <View style={styles.receiptFooter}>
-            <Text style={styles.footerText}>Terima Kasih Atas Kunjungan Anda! 🙏</Text>
+            <Text style={styles.footerText}>Terima Kasih Atas Kunjungan Anda!</Text>
             <Text style={styles.footerSub}>Dicetak via Aplikasi LabaNotera</Text>
           </View>
         </View>

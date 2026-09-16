@@ -24,7 +24,7 @@ import {
   deleteProduct,
   updateProductStock,
 } from '../../src/services/productService';
-import { formatRupiah, parseRupiahToNumber } from '../../src/utils/formatters';
+import { formatRupiah, parseRupiahToNumber, isKgProduct } from '../../src/utils/formatters';
 import { showAppAlert } from '../../src/utils/alertHelper';
 import { Colors } from '../../src/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -48,6 +48,7 @@ export default function StockScreen() {
   const [buyPrice, setBuyPrice] = useState('');
   const [sellPrice, setSellPrice] = useState('');
   const [stock, setStock] = useState('');
+  const [isKg, setIsKg] = useState(false);
   const [isConsignment, setIsConsignment] = useState(false);
   const [supplierName, setSupplierName] = useState('');
   const [category, setCategory] = useState<'BARANG_POKOK' | 'SNACK' | 'MINUMAN'>('BARANG_POKOK');
@@ -83,6 +84,7 @@ export default function StockScreen() {
     setBuyPrice('');
     setSellPrice('');
     setStock('10');
+    setIsKg(false);
     setIsConsignment(false);
     setSupplierName('');
     setCategory('BARANG_POKOK');
@@ -96,6 +98,7 @@ export default function StockScreen() {
     setBuyPrice('');
     setSellPrice('');
     setStock('10');
+    setIsKg(false);
     setIsConsignment(false);
     setSupplierName('');
     setCategory('BARANG_POKOK');
@@ -109,6 +112,7 @@ export default function StockScreen() {
     setBuyPrice(formatRupiah(product.buy_price));
     setSellPrice(formatRupiah(product.sell_price));
     setStock(product.stock.toString());
+    setIsKg(product.is_kg === 1 || isKgProduct(product));
     setIsConsignment(product.is_consignment === 1);
     setSupplierName(product.supplier_name || '');
     setCategory((product.category as any) || 'BARANG_POKOK');
@@ -123,7 +127,7 @@ export default function StockScreen() {
 
     const buyPriceNum = parseRupiahToNumber(buyPrice);
     const sellPriceNum = parseRupiahToNumber(sellPrice);
-    const stockNum = parseInt(stock, 10) || 0;
+    const stockNum = parseFloat(stock.replace(',', '.')) || 0;
 
     if (sellPriceNum <= 0) {
       showAppAlert('Harga Jual Harus Valid', 'Harga jual harus lebih dari 0.');
@@ -142,6 +146,7 @@ export default function StockScreen() {
           is_consignment: isConsignment ? 1 : 0,
           supplier_name: isConsignment ? supplierName.trim() || null : null,
           category,
+          is_kg: isKg ? 1 : 0,
         });
         showAppAlert('Berhasil', 'Data produk berhasil diperbarui.');
       } else {
@@ -154,6 +159,7 @@ export default function StockScreen() {
           is_consignment: isConsignment ? 1 : 0,
           supplier_name: isConsignment ? supplierName.trim() || null : null,
           category,
+          is_kg: isKg ? 1 : 0,
         });
         showAppAlert('Berhasil', 'Produk baru berhasil ditambahkan.');
       }
@@ -263,6 +269,12 @@ export default function StockScreen() {
                 <View style={{ flex: 1 }}>
                   <View style={styles.titleRow}>
                     <Text style={styles.productTitle}>{item.name}</Text>
+                    {isKgProduct(item) ? (
+                      <View style={styles.tagKg}>
+                        <Ionicons name="scale-outline" color="#059669" size={12} />
+                        <Text style={styles.tagKgText}>Timbangan / Kiloan</Text>
+                      </View>
+                    ) : null}
                     {item.is_consignment === 1 ? (
                       <View style={styles.tagConsignment}>
                         <Ionicons name="people-outline" color={Colors.secondary} size={12} />
@@ -306,7 +318,7 @@ export default function StockScreen() {
                 <View style={styles.detailCol}>
                   <Text style={styles.detailLabel}>Harga Jual</Text>
                   <Text style={[styles.detailValue, { color: Colors.primaryDark, fontWeight: 'bold' }]}>
-                    {formatRupiah(item.sell_price)}
+                    {formatRupiah(item.sell_price)} {isKgProduct(item) ? '/ kg' : ''}
                   </Text>
                 </View>
 
@@ -328,7 +340,7 @@ export default function StockScreen() {
                       item.stock < 5 ? { color: Colors.danger } : { color: Colors.text },
                     ]}
                   >
-                    {item.stock} item
+                    {item.stock} {isKgProduct(item) ? 'kg' : 'item'}
                   </Text>
                 </Text>
 
@@ -448,7 +460,7 @@ export default function StockScreen() {
               {/* Consignment Switch */}
               <View style={styles.switchRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.switchTitle}>Barang Titipan / Konsinyasi 🤝</Text>
+                  <Text style={styles.switchTitle}>Barang Titipan / Konsinyasi</Text>
                   <Text style={styles.switchSub}>
                     Aktifkan jika barang ini titipan dari tetangga/mitra usaha (gorengan, kue, kerupuk).
                   </Text>
@@ -458,6 +470,27 @@ export default function StockScreen() {
                   onValueChange={setIsConsignment}
                   trackColor={{ false: '#CBD5E1', true: Colors.primaryLight }}
                   thumbColor={isConsignment ? Colors.primary : '#94A3B8'}
+                />
+              </View>
+
+              {/* Kiloan / Timbangan Switch */}
+              <View style={styles.switchRow}>
+                <View style={{ flex: 1, marginRight: 10 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="scale-outline" size={18} color={isKg ? '#047857' : Colors.text} />
+                    <Text style={styles.switchTitle}>Barang Timbangan / Kiloan</Text>
+                  </View>
+                  <Text style={styles.switchSub}>
+                    {isKg
+                      ? 'Aktif: Di kasir otomatis tersedia opsi 1/4 kg, 1/2 kg, 3/4 kg, timbangan manual, atau beli nominal uang (misal beli Rp 10.000).'
+                      : 'Nonaktif: Barang dijual per satuan / pcs biasa.'}
+                  </Text>
+                </View>
+                <Switch
+                  value={isKg}
+                  onValueChange={setIsKg}
+                  trackColor={{ false: '#CBD5E1', true: '#A7F3D0' }}
+                  thumbColor={isKg ? '#059669' : '#94A3B8'}
                 />
               </View>
 
@@ -593,6 +626,22 @@ const styles = StyleSheet.create({
   tagConsignmentText: {
     fontSize: 11,
     color: Colors.secondary,
+    fontWeight: 'bold',
+  },
+  tagKg: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  tagKgText: {
+    fontSize: 11,
+    color: '#059669',
     fontWeight: 'bold',
   },
   barcodeText: {

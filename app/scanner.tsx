@@ -24,7 +24,7 @@ export default function ScannerScreen() {
 
       if (product) {
         Alert.alert(
-          'Produk Ditemukan! 📦',
+          'Produk Ditemukan',
           `Nama: ${product.name}\nHarga Jual: ${formatRupiah(product.sell_price)}\nStok: ${product.stock}\nBarcode: ${data}`,
           [
             {
@@ -39,7 +39,7 @@ export default function ScannerScreen() {
         );
       } else {
         Alert.alert(
-          'Produk Baru 🆕',
+          'Produk Baru',
           `Barcode "${data}" belum terdaftar di database warung. Apakah Anda ingin mendaftarkan produk ini?`,
           [
             {

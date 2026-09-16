@@ -111,7 +111,7 @@ export default function ReportScreen() {
 
           <div class="card" style="margin-top: 16px;">
             <div class="row">
-              <span class="label">🤝 Bagi Hasil Barang Titipan Terutang</span>
+              <span class="label">Bagi Hasil Barang Titipan Terutang</span>
               <span class="value" style="color: #d97706;">${formatRupiah(summary.totalConsignmentOwed)}</span>
             </div>
             <div class="row" style="margin-top: 6px;">

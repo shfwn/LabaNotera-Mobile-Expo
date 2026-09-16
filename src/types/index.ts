@@ -8,6 +8,7 @@ export interface Product {
   is_consignment: number; // 0: Normal product, 1: Consignment (Barang Titipan)
   supplier_name?: string | null;
   category?: string | null; // SNACK, MINUMAN, BARANG_POKOK
+  is_kg?: number; // 0: Satuan/Pcs biasa, 1: Kiloan/Timbangan (Bisa beli 1/4 kg, dll)
   created_at?: string;
 }
 

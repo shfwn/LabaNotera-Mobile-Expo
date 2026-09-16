@@ -8,7 +8,6 @@ import {
   TextInput,
   Image,
   ScrollView,
-  Alert,
   ActivityIndicator,
   Platform,
 } from 'react-native';
@@ -16,6 +15,7 @@ import { useAppSQLiteContext as useSQLiteContext } from '../db/AppDatabaseProvid
 import { ShopProfile } from '../types';
 import { getShopProfile, updateShopProfile, DEFAULT_PROFILE } from '../services/profileService';
 import { pickImageFromGallery } from '../utils/imageHelper';
+import { showAppAlert } from '../utils/alertHelper';
 import { Colors } from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -74,13 +74,13 @@ export default function ProfileModal({ visible, onClose, onProfileUpdated }: Pro
         setQrisImageUri(uri);
       }
     } catch (err) {
-      Alert.alert('Gagal Memilih Foto', 'Terjadi kesalahan saat memilih gambar.');
+      showAppAlert('Gagal Memilih Foto', 'Terjadi kesalahan saat memilih gambar.');
     }
   };
 
   const handleSave = async () => {
     if (!shopName.trim()) {
-      Alert.alert('Nama Warung Wajib', 'Mohon masukkan nama warung Anda.');
+      showAppAlert('Nama Warung Wajib', 'Mohon masukkan nama warung Anda.');
       return;
     }
 
@@ -103,10 +103,10 @@ export default function ProfileModal({ visible, onClose, onProfileUpdated }: Pro
         onProfileUpdated(updatedData);
       }
 
-      Alert.alert('Berhasil', 'Profil warung & informasi pembayaran berhasil disimpan!');
+      showAppAlert('Berhasil', 'Profil warung & informasi pembayaran berhasil disimpan!');
       onClose();
     } catch (err: any) {
-      Alert.alert('Gagal Menyimpan', err.message || 'Terjadi kesalahan saat menyimpan profil.');
+      showAppAlert('Gagal Menyimpan', err.message || 'Terjadi kesalahan saat menyimpan profil.');
     } finally {
       setSaving(false);
     }

@@ -76,6 +76,10 @@ export default function DebtScreen() {
       showAppAlert('Nama Pelanggan Wajib', 'Mohon isi nama pelanggan utang.');
       return;
     }
+    if (!newPhone.trim()) {
+      showAppAlert('Nomor HP Wajib', 'Mohon masukkan nomor HP / WhatsApp pelanggan untuk catatan utang agar dapat dihubungi atau diingatkan via WA.');
+      return;
+    }
     const amount = parseRupiahToNumber(newTotalDebt);
     if (amount <= 0) {
       showAppAlert('Jumlah Utang Wajib', 'Mohon masukkan jumlah utang yang valid.');
@@ -83,7 +87,7 @@ export default function DebtScreen() {
     }
 
     try {
-      await addDebt(db, newCustomerName.trim(), newPhone.trim() || null, amount);
+      await addDebt(db, newCustomerName.trim(), newPhone.trim(), amount);
       setIsAddModalVisible(false);
       setNewCustomerName('');
       setNewPhone('');
@@ -502,7 +506,7 @@ export default function DebtScreen() {
                 />
               </View>
 
-              <Text style={[styles.formLabel, { marginTop: 12 }]}>No. HP WhatsApp (Opsional):</Text>
+              <Text style={[styles.formLabel, { marginTop: 12 }]}>No. HP / WhatsApp (Wajib):</Text>
               <View style={styles.inputWithIcon}>
                 <Ionicons name="logo-whatsapp" color={Colors.success} size={18} />
                 <TextInput

@@ -1,5 +1,3 @@
-import { replace } from "expo-router/build/global-state/routing";
-
 export function formatRupiah(value: number | string): string {
   if (value === undefined || value === null || value === '') return '';
   
@@ -41,9 +39,9 @@ export function generateTrxCode(): string {
 }
 
 export function generateDebtWaMessage(customerName: string, remainingDebt: number, warungName: string = 'Warung LabaNotera'): string {
-  return `Halo Kak ${customerName}, salam hangat dari ${warungName} 👋.\n\n` +
+  return `Halo Kak ${customerName}, salam hangat dari ${warungName}.\n\n` +
     `Mengingatkan mengenai catatan kasbon/utang belanja sebesar *${formatRupiah(remainingDebt)}*.\n\n` +
-    `Pembayaran dapat dilakukan tunai atau via QRIS. Terima kasih banyak atas kerjasamanya! 🙏`;
+    `Pembayaran dapat dilakukan tunai atau via QRIS. Terima kasih banyak atas kerjasamanya.`;
 }
 
 export function getTransactionReceivedAmount(trx: {
@@ -96,9 +94,12 @@ export function getProductCategory(product: { name: string; category?: string | 
   return 'BARANG_POKOK';
 }
 
-export function isKgProduct(product: { name: string; category?: string | null }): boolean {
-  if (!product || !product.name) return false;
-  const nameLower = product.name.toLowerCase();
+export function isKgProduct(product: { name?: string; is_kg?: number | null; category?: string | null }): boolean {
+  if (!product) return false;
+  if (product.is_kg !== undefined && product.is_kg !== null) {
+    return product.is_kg === 1;
+  }
+  const nameLower = (product.name || '').toLowerCase();
   const kgKeywords = [
     'kg', 'kilo', 'gram', 'gr',
     'beras', 'telur', 'telor', 'gula', 'tepung',

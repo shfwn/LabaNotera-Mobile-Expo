@@ -30,6 +30,10 @@ export async function payDebt(
   const debt = await db.getFirstAsync<Debt>(`SELECT * FROM debts WHERE id = ?`, [debtId]);
   if (!debt) throw new Error('Catatan utang tidak ditemukan');
 
+  if (amountPaid > debt.remaining_debt) {
+    throw new Error(`Nominal pembayaran (${amountPaid}) melebihi sisa utang (${debt.remaining_debt}).`);
+  }
+
   const newRemaining = Math.max(0, Math.round(debt.remaining_debt - amountPaid));
   let newStatus: 'UNPAID' | 'PARTIAL' | 'PAID' = 'PARTIAL';
   if (newRemaining <= 0) {

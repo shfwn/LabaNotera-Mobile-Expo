@@ -15,6 +15,7 @@ export async function initDatabase(db: SQLiteDatabase) {
         is_consignment INTEGER DEFAULT 0,
         supplier_name TEXT,
         category TEXT DEFAULT 'BARANG_POKOK',
+        is_kg INTEGER DEFAULT 0,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -83,6 +84,13 @@ export async function initDatabase(db: SQLiteDatabase) {
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    // Migration: add is_kg column if missing in existing database
+    try {
+      await db.execAsync(`ALTER TABLE products ADD COLUMN is_kg INTEGER DEFAULT 0;`);
+    } catch (e) {
+      // Column already exists
+    }
 
     // Check if shop_profile exists; if not, populate default profile
     const profileCount = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM shop_profile');
