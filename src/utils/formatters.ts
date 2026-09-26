@@ -59,39 +59,57 @@ export function getTransactionReceivedAmount(trx: {
   return trx.total_amount;
 }
 
-export function getProductCategory(product: { name: string; category?: string | null }): 'SNACK' | 'MINUMAN' | 'BARANG_POKOK' {
-  if (product.category === 'SNACK' || product.category === 'MINUMAN' || product.category === 'BARANG_POKOK') {
+export function getProductCategory(product: { name: string; category?: string | null }): 'SEMBAKO' | 'KONSUMSI' | 'SANITASI' | 'DIGITAL_KOMODITAS' {
+  if (
+    product.category === 'SEMBAKO' ||
+    product.category === 'KONSUMSI' ||
+    product.category === 'SANITASI' ||
+    product.category === 'DIGITAL_KOMODITAS'
+  ) {
     return product.category;
   }
-  const nameLower = product.name.toLowerCase();
-  if (
-    nameLower.includes('kopi') ||
-    nameLower.includes('teh') ||
-    nameLower.includes('air') ||
-    nameLower.includes('minuman') ||
-    nameLower.includes('jus') ||
-    nameLower.includes('susu') ||
-    nameLower.includes('aqua') ||
-    nameLower.includes('pucuk')
-  ) {
-    return 'MINUMAN';
+  
+  // Legacy category mapping
+  if (product.category === 'BARANG_POKOK') return 'SEMBAKO';
+  if (product.category === 'SNACK' || product.category === 'MINUMAN') return 'KONSUMSI';
+
+  const nameLower = (product.name || '').toLowerCase();
+
+  // 1. Perlengkapan Rumah & Sanitasi
+  const sanitasiKeywords = [
+    'sabun', 'sampo', 'shampoo', 'deterjen', 'detergen', 'rinso', 'daia', 'soklin',
+    'sunlight', 'mama lemon', 'pasta gigi', 'odol', 'pepsodent', 'ciptadent', 'sikat gigi',
+    'pewangi', 'molto', 'downy', 'pembersih', 'lantai', 'wipol', 'superpell', 'tisu',
+    'baygon', 'hit', 'autan', 'soffell', 'pembalut', 'sikat', 'spons', 'clink', 'vixal'
+  ];
+  if (sanitasiKeywords.some((k) => nameLower.includes(k))) {
+    return 'SANITASI';
   }
-  if (
-    nameLower.includes('gorengan') ||
-    nameLower.includes('kue') ||
-    nameLower.includes('kerupuk') ||
-    nameLower.includes('snack') ||
-    nameLower.includes('chitato') ||
-    nameLower.includes('wafer') ||
-    nameLower.includes('biskuat') ||
-    nameLower.includes('roti') ||
-    nameLower.includes('kripik') ||
-    nameLower.includes('ciki') ||
-    nameLower.includes('jajanan')
-  ) {
-    return 'SNACK';
+
+  // 2. Produk Komoditas & Digital
+  const komoditasKeywords = [
+    'rokok', 'sampoerna', 'djarum', 'gudang garam', 'marlboro', 'surya', 'magnum',
+    'la lights', 'esse', 'camel', 'gas', 'elpiji', 'lpg', '3kg', 'obat', 'bodrex',
+    'paracetamol', 'panadol', 'tolak angin', 'promag', 'antimo', 'mixagrip', 'konidin',
+    'oskadon', 'diatabs', 'pulsa', 'token', 'listrik', 'baterai', 'korek', 'tokai'
+  ];
+  if (komoditasKeywords.some((k) => nameLower.includes(k))) {
+    return 'DIGITAL_KOMODITAS';
   }
-  return 'BARANG_POKOK';
+
+  // 3. Bahan Pokok & Sembako
+  const sembakoKeywords = [
+    'beras', 'minyak', 'gula', 'tepung', 'telur', 'telor', 'kecap', 'garam',
+    'bumbu', 'royco', 'masako', 'santan', 'kara', 'saos', 'saus', 'mentega',
+    'blue band', 'margarin', 'terigu', 'tapioka', 'bawang', 'cabe', 'cabai',
+    'merica', 'ketumbar', 'ajinomoto', 'sasa', 'sarden'
+  ];
+  if (sembakoKeywords.some((k) => nameLower.includes(k))) {
+    return 'SEMBAKO';
+  }
+
+  // 4. Makanan & Minuman Konsumsi (default untuk jajanan, mie, kopi, dll)
+  return 'KONSUMSI';
 }
 
 export function isKgProduct(product: { name?: string; is_kg?: number | null; category?: string | null }): boolean {

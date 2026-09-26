@@ -1,3 +1,5 @@
+export type ProductCategory = 'SEMBAKO' | 'KONSUMSI' | 'SANITASI' | 'DIGITAL_KOMODITAS';
+
 export interface Product {
   id: number;
   barcode?: string | null;
@@ -7,7 +9,7 @@ export interface Product {
   stock: number;
   is_consignment: number; // 0: Normal product, 1: Consignment (Barang Titipan)
   supplier_name?: string | null;
-  category?: string | null; // SNACK, MINUMAN, BARANG_POKOK
+  category?: ProductCategory | string | null;
   is_kg?: number; // 0: Satuan/Pcs biasa, 1: Kiloan/Timbangan (Bisa beli 1/4 kg, dll)
   created_at?: string;
 }
@@ -62,7 +64,7 @@ export type ExpenseType = 'PRIVE' | 'EXPENSE' | 'RESTOCK';
 
 export interface PriveExpense {
   id: number;
-  type: ExpenseType; // PRIVE: Uang Dapur/Pribadi, EXPENSE: Biaya Operasional, RESTOCK: Belanja Stok/Kulakan
+  type: ExpenseType; // PRIVE: Uang Dapur/Pribadi, EXPENSE: Biaya Operasional, RESTOCK: Belanja Stok Barang
   amount: number;
   note: string;
   date: string;
@@ -81,7 +83,8 @@ export interface FinancialReportSummary {
   totalExpense: number;
   totalRestock?: number;
   netProfit: number;
-  totalConsignmentOwed: number;
+  totalItemsSold?: number;
+  totalConsignmentOwed?: number;
   transactionCount: number;
   totalDebtRemaining?: number;
 }
@@ -89,7 +92,8 @@ export interface FinancialReportSummary {
 export interface DailyFinancialSummary {
   todayRevenue: number;
   todayGrossProfit: number;
-  todayConsignmentOwed: number;
+  todayItemsSold: number;
+  todayConsignmentOwed?: number;
   todayTransactionCount: number;
 }
 
@@ -103,6 +107,61 @@ export interface ShopProfile {
   bank_account_number?: string | null;
   bank_account_holder?: string | null;
   qris_image_uri?: string | null;
+  closing_time?: string | null;
+  last_report_date?: string | null;
   updated_at?: string;
+}
+
+export interface DailyReportProductItem {
+  product_name: string;
+  category: ProductCategory;
+  qty_sold: number;
+  is_kg: number;
+  is_consignment: number;
+  total_revenue: number;
+  total_hpp: number;
+  total_profit: number;
+}
+
+export interface DailyReportTransactionItem {
+  id: number;
+  transaction_code: string;
+  created_at: string;
+  payment_method: PaymentMethod;
+  customer_name?: string | null;
+  total_amount: number;
+  total_cost: number;
+  gross_profit: number;
+  status: 'SUCCESS' | 'CANCELLED';
+}
+
+export interface DailyReportExpenseItem {
+  id: number;
+  type: 'PRIVE' | 'EXPENSE' | 'RESTOCK';
+  amount: number;
+  note: string;
+  date: string;
+}
+
+export interface DailyFullReportData {
+  targetDate: string;
+  formattedDate: string;
+  shopProfile: ShopProfile;
+  // Financial Overview
+  todayRevenue: number;
+  todayHPP: number;
+  todayGrossProfit: number;
+  todayPrive: number;
+  todayExpense: number;
+  todayRestock: number;
+  todayConsignmentOwed: number;
+  todayNetProfit: number;
+  todayEstimatedCashDrawer: number;
+  todayTransactionCount: number;
+  todayItemsSold: number;
+  // Detail Breakdowns
+  productsSold: DailyReportProductItem[];
+  transactions: DailyReportTransactionItem[];
+  expenses: DailyReportExpenseItem[];
 }
 

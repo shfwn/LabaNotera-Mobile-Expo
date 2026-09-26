@@ -137,6 +137,8 @@ export async function printReceipt(
   await Print.printAsync({ html });
 }
 
+import * as FileSystem from 'expo-file-system/legacy';
+
 export async function shareReceiptPdf(
   transaction: Transaction,
   items: TransactionItem[],
@@ -147,14 +149,34 @@ export async function shareReceiptPdf(
     await Print.printAsync({ html });
     return;
   }
-  const { uri } = await Print.printToFileAsync({ html });
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, {
-      mimeType: 'application/pdf',
-      dialogTitle: `Struk_${transaction.transaction_code}`,
-      UTI: 'com.adobe.pdf',
-    });
-  } else {
-    await Print.printAsync({ html });
+  try {
+    const { base64, uri } = await Print.printToFileAsync({ html, base64: true });
+    const filename = `Struk_${transaction.transaction_code}.pdf`;
+    const targetUri = `${FileSystem.documentDirectory || FileSystem.cacheDirectory}${filename}`;
+
+    let shareTargetUri = uri;
+    if (base64) {
+      await FileSystem.writeAsStringAsync(targetUri, base64, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      shareTargetUri = targetUri;
+    }
+
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(shareTargetUri, {
+        mimeType: 'application/pdf',
+        dialogTitle: `Struk_${transaction.transaction_code}`,
+        UTI: 'com.adobe.pdf',
+      });
+    } else {
+      await Print.printAsync({ html });
+    }
+  } catch (err) {
+    console.error('Failed to share receipt PDF:', err);
+    try {
+      await Print.printAsync({ html });
+    } catch {
+      // ignore
+    }
   }
 }

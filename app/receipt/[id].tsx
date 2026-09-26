@@ -5,9 +5,9 @@ import {
   View,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
   ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppSQLiteContext as useSQLiteContext } from '../../src/db/AppDatabaseProvider';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Transaction, TransactionItem, ShopProfile } from '../../src/types';
@@ -366,14 +366,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
     backgroundColor: '#FEE2E2',
-    padding: 16,
-    borderRadius: 12,
+    padding: 18,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: '#FECACA',
   },
   cancelledTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '800',
     color: Colors.danger,
     marginTop: 6,
   },
@@ -391,24 +391,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF2F2',
     paddingVertical: 6,
     paddingHorizontal: 12,
-    borderRadius: 6,
+    borderRadius: 9999,
     borderWidth: 1,
     borderColor: '#FCA5A5',
     marginBottom: 12,
   },
   voidBadgeHeaderText: {
     color: Colors.danger,
-    fontWeight: 'bold',
+    fontWeight: '800',
     fontSize: 12,
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
   receiptPaper: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
+    borderRadius: 24,
+    padding: 22,
     borderWidth: 1,
-    borderColor: Colors.border,
-    ...getShadowStyle(3),
+    borderColor: '#F0F3F1',
+    ...getShadowStyle(2),
     marginBottom: 20,
   },
   receiptHeader: {
@@ -417,10 +417,10 @@ const styles = StyleSheet.create({
   },
   storeTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: Colors.primaryDark,
+    fontWeight: '800',
+    color: Colors.primary,
     marginTop: 6,
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
   metaText: {
     fontSize: 11,
@@ -442,7 +442,7 @@ const styles = StyleSheet.create({
   },
   itemName: {
     fontSize: 13,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: Colors.text,
   },
   itemSub: {
@@ -452,7 +452,7 @@ const styles = StyleSheet.create({
   },
   itemSubtotal: {
     fontSize: 13,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: Colors.text,
   },
   totalRow: {
@@ -462,14 +462,14 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   totalLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 15,
+    fontWeight: '800',
     color: Colors.text,
   },
   totalValue: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.primaryDark,
+    fontWeight: '800',
+    color: Colors.primary,
   },
   methodRow: {
     flexDirection: 'row',
@@ -482,7 +482,7 @@ const styles = StyleSheet.create({
   },
   methodValue: {
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: Colors.text,
   },
   detailSection: {
@@ -500,9 +500,9 @@ const styles = StyleSheet.create({
   },
   detailRowHighlight: {
     backgroundColor: '#FFF5F5',
-    paddingHorizontal: 6,
-    borderRadius: 6,
-    marginHorizontal: -6,
+    paddingHorizontal: 8,
+    borderRadius: 9999,
+    marginHorizontal: -4,
   },
   detailLabel: {
     fontSize: 12,
@@ -511,7 +511,7 @@ const styles = StyleSheet.create({
   },
   detailValue: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
     color: Colors.text,
     textAlign: 'right',
   },
@@ -524,7 +524,7 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
     color: Colors.textSecondary,
   },
   footerSub: {
@@ -533,7 +533,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   actionsBox: {
-    gap: 10,
+    gap: 12,
   },
   printBtn: {
     backgroundColor: Colors.primary,
@@ -541,29 +541,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 14,
-    borderRadius: 10,
+    borderRadius: 9999,
     gap: 8,
   },
   printBtnText: {
     color: '#FFFFFF',
     fontSize: 15,
-    fontWeight: 'bold',
+    fontWeight: '800',
   },
   shareBtn: {
     backgroundColor: Colors.primaryLight,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: Colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 14,
-    borderRadius: 10,
+    borderRadius: 9999,
     gap: 8,
   },
   shareBtnText: {
-    color: Colors.primaryDark,
+    color: Colors.primary,
     fontSize: 15,
-    fontWeight: 'bold',
+    fontWeight: '800',
   },
   voidBtn: {
     backgroundColor: '#FEF2F2',
@@ -573,13 +573,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 13,
-    borderRadius: 10,
+    borderRadius: 9999,
     gap: 8,
   },
   voidBtnText: {
     color: Colors.danger,
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '800',
   },
   doneBtn: {
     flexDirection: 'row',
@@ -591,6 +591,6 @@ const styles = StyleSheet.create({
   doneBtnText: {
     color: Colors.textSecondary,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

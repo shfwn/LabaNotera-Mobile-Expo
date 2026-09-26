@@ -16,6 +16,7 @@ import { ShopProfile } from '../types';
 import { getShopProfile, updateShopProfile, DEFAULT_PROFILE } from '../services/profileService';
 import { pickImageFromGallery } from '../utils/imageHelper';
 import { showAppAlert } from '../utils/alertHelper';
+import { syncClosingTimeSchedule } from '../utils/closingReminderHelper';
 import { Colors } from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -41,6 +42,7 @@ export default function ProfileModal({ visible, onClose, onProfileUpdated }: Pro
   const [bankAccountNumber, setBankAccountNumber] = useState('');
   const [bankAccountHolder, setBankAccountHolder] = useState('');
   const [qrisImageUri, setQrisImageUri] = useState<string | null>(null);
+  const [closingTime, setClosingTime] = useState('21:00');
 
   useEffect(() => {
     if (visible) {
@@ -60,6 +62,7 @@ export default function ProfileModal({ visible, onClose, onProfileUpdated }: Pro
       setBankAccountNumber(profile.bank_account_number || '');
       setBankAccountHolder(profile.bank_account_holder || '');
       setQrisImageUri(profile.qris_image_uri || null);
+      setClosingTime(profile.closing_time || '21:00');
     } catch (err) {
       console.error('Failed to load profile:', err);
     } finally {
@@ -95,9 +98,11 @@ export default function ProfileModal({ visible, onClose, onProfileUpdated }: Pro
         bank_account_number: bankAccountNumber.trim() || null,
         bank_account_holder: bankAccountHolder.trim() || null,
         qris_image_uri: qrisImageUri || null,
+        closing_time: closingTime.trim() || '21:00',
       };
 
       await updateShopProfile(db, updatedData);
+      await syncClosingTimeSchedule(db);
 
       if (onProfileUpdated) {
         onProfileUpdated(updatedData);
@@ -192,6 +197,38 @@ export default function ProfileModal({ visible, onClose, onProfileUpdated }: Pro
                     placeholderTextColor={Colors.textMuted}
                   />
                 </View>
+
+                {/* Jam Tutup Toko */}
+                <Text style={styles.inputLabel}>Jam Tutup Toko (WIB)</Text>
+                <View style={styles.inputBox}>
+                  <Ionicons name="time-outline" color={Colors.textMuted} size={18} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Contoh: 21:00"
+                    value={closingTime}
+                    onChangeText={setClosingTime}
+                    placeholderTextColor={Colors.textMuted}
+                  />
+                </View>
+
+                {/* Quick Chips */}
+                <View style={styles.timeChipsRow}>
+                  {['17:00', '20:00', '21:00', '22:00', '23:00'].map((t) => (
+                    <TouchableOpacity
+                      key={t}
+                      style={[styles.timeChip, closingTime === t && styles.timeChipActive]}
+                      onPress={() => setClosingTime(t)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.timeChipText, closingTime === t && styles.timeChipTextActive]}>
+                        {t}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={styles.inputHelperText}>
+                  * Menjadi patokan pengingat otomatis tutup kasir & ekspor laporan harian.
+                </Text>
               </View>
 
               {/* Section 2: Rekening Bank & Transfer */}
@@ -330,9 +367,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#F8FAFC',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    backgroundColor: '#F8FAF8',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     maxHeight: '92%',
     paddingBottom: Platform.OS === 'ios' ? 24 : 12,
   },
@@ -340,31 +377,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: '#F0F3F1',
   },
   headerTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
     flex: 1,
   },
   headerIconBg: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: Colors.primaryDark,
+    width: 40,
+    height: 40,
+    borderRadius: 9999,
+    backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '800',
     color: Colors.text,
   },
   modalSubtitle: {
@@ -374,6 +411,8 @@ const styles = StyleSheet.create({
   },
   closeBtn: {
     padding: 6,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 9999,
   },
   loadingBox: {
     padding: 40,
@@ -386,25 +425,25 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
   },
   modalBody: {
-    padding: 14,
+    padding: 16,
   },
   sectionCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 12,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#F0F3F1',
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
     marginBottom: 4,
   },
   sectionTitle: {
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: Colors.text,
   },
   sectionDesc: {
@@ -415,7 +454,7 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
     color: Colors.textSecondary,
     marginBottom: 6,
     marginTop: 8,
@@ -427,12 +466,12 @@ const styles = StyleSheet.create({
   inputBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F8FAF8',
     borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    height: 42,
+    borderColor: '#E5E9E6',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 44,
   },
   input: {
     flex: 1,
@@ -440,18 +479,53 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.text,
   },
+  timeChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  timeChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 9999,
+    backgroundColor: '#F1F5F2',
+    borderWidth: 1,
+    borderColor: '#E5E9E6',
+  },
+  timeChipActive: {
+    backgroundColor: Colors.primaryLight,
+    borderColor: Colors.primary,
+  },
+  timeChipText: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+  },
+  timeChipTextActive: {
+    color: Colors.primaryDark,
+    fontWeight: '800',
+  },
+  inputHelperText: {
+    fontSize: 10,
+    color: Colors.textMuted,
+    fontStyle: 'italic',
+    marginTop: 4,
+    lineHeight: 14,
+  },
   bankPillsRow: {
     flexDirection: 'row',
     marginBottom: 10,
   },
   bankPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#F1F5F9',
-    marginRight: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 9999,
+    backgroundColor: '#F1F5F2',
+    marginRight: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: 'transparent',
   },
   bankPillActive: {
     backgroundColor: Colors.primaryLight,
@@ -463,24 +537,24 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   bankPillTextActive: {
-    color: Colors.primaryDark,
-    fontWeight: 'bold',
+    color: Colors.primary,
+    fontWeight: '800',
   },
   qrisUploadBox: {
     borderWidth: 1.5,
     borderColor: Colors.primary,
     borderStyle: 'dashed',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F0FDFA',
-    marginTop: 4,
+    backgroundColor: '#F8FAF8',
+    marginTop: 6,
   },
   uploadIconCircle: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: 9999,
     backgroundColor: Colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
@@ -488,8 +562,8 @@ const styles = StyleSheet.create({
   },
   uploadMainText: {
     fontSize: 13,
-    fontWeight: 'bold',
-    color: Colors.primaryDark,
+    fontWeight: '700',
+    color: Colors.primary,
   },
   uploadSubText: {
     fontSize: 11,
@@ -498,68 +572,69 @@ const styles = StyleSheet.create({
   },
   qrisPreviewContainer: {
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    padding: 12,
+    backgroundColor: '#F8FAF8',
+    borderRadius: 16,
+    padding: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#E5E9E6',
   },
   qrisImagePreview: {
     width: 200,
     height: 200,
-    borderRadius: 8,
+    borderRadius: 12,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: Colors.border,
   },
   qrisActionRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
+    gap: 10,
+    marginTop: 14,
   },
   qrisChangeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.primary,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 9999,
+    gap: 6,
   },
   qrisChangeBtnText: {
     color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   qrisDeleteBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.dangerLight,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 9999,
+    gap: 6,
   },
   qrisDeleteBtnText: {
     color: Colors.danger,
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   modalFooter: {
     paddingHorizontal: 16,
-    paddingTop: 10,
+    paddingTop: 12,
+    paddingBottom: 8,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: '#F0F3F1',
   },
   saveButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.primaryDark,
-    paddingVertical: 13,
-    borderRadius: 10,
-    gap: 6,
+    backgroundColor: Colors.primary,
+    paddingVertical: 14,
+    borderRadius: 9999,
+    gap: 8,
   },
   saveButtonDisabled: {
     opacity: 0.6,
@@ -567,6 +642,6 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: '#FFFFFF',
     fontSize: 15,
-    fontWeight: 'bold',
+    fontWeight: '800',
   },
 });

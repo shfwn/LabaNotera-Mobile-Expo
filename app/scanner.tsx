@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Alert, TextInput, Platform } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, TextInput, Platform } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useAppSQLiteContext as useSQLiteContext } from '../src/db/AppDatabaseProvider';
 import { useRouter } from 'expo-router';
@@ -7,6 +7,7 @@ import { getProductByBarcode } from '../src/services/productService';
 import { formatRupiah } from '../src/utils/formatters';
 import { Colors } from '../src/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { showAppAlert } from '../src/utils/alertHelper';
 
 export default function ScannerScreen() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -23,7 +24,7 @@ export default function ScannerScreen() {
       const product = await getProductByBarcode(db, data);
 
       if (product) {
-        Alert.alert(
+        showAppAlert(
           'Produk Ditemukan',
           `Nama: ${product.name}\nHarga Jual: ${formatRupiah(product.sell_price)}\nStok: ${product.stock}\nBarcode: ${data}`,
           [
@@ -38,7 +39,7 @@ export default function ScannerScreen() {
           ]
         );
       } else {
-        Alert.alert(
+        showAppAlert(
           'Produk Baru',
           `Barcode "${data}" belum terdaftar di database warung. Apakah Anda ingin mendaftarkan produk ini?`,
           [

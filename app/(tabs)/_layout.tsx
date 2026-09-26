@@ -21,11 +21,11 @@ export default function TabLayout() {
           fontWeight: '600',
         },
         headerStyle: {
-          backgroundColor: Colors.primaryDark,
+          backgroundColor: Colors.primary,
         },
         headerTintColor: '#FFFFFF',
         headerTitleStyle: {
-          fontWeight: 'bold',
+          fontWeight: '700',
           fontSize: 18,
         },
       }}
@@ -48,7 +48,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="stock"
         options={{
-          title: 'Stok Warung',
+          title: 'Stok',
           headerTitle: 'Stok & Persediaan',
           tabBarIcon: ({ color, size }) => <Ionicons name="cube-outline" color={color} size={size} />,
         }}

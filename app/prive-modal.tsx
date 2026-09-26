@@ -7,8 +7,8 @@ import {
   TextInput,
   FlatList,
   Alert,
-  SafeAreaView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppSQLiteContext as useSQLiteContext } from '../src/db/AppDatabaseProvider';
 import { useRouter } from 'expo-router';
 import { PriveExpense, ExpenseType } from '../src/types';
@@ -194,7 +194,7 @@ export default function PriveModalScreen() {
                   {item.type === 'PRIVE'
                     ? 'PRIVE / DAPUR'
                     : item.type === 'RESTOCK'
-                    ? 'KULAKAN / STOK'
+                    ? 'BELANJA STOK'
                     : 'BIAYA WARUNG'}
                 </Text>
               </View>
@@ -230,13 +230,21 @@ const styles = StyleSheet.create({
   formCard: {
     backgroundColor: '#FFFFFF',
     padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#F0F3F1',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
   sectionTitle: {
     fontSize: 14,
-    fontWeight: 'bold',
-    color: Colors.textSecondary,
+    fontWeight: '800',
+    color: Colors.text,
     marginBottom: 10,
   },
   typeSelector: {
@@ -250,9 +258,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
-    borderRadius: 8,
+    borderRadius: 9999,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#E5E9E6',
+    backgroundColor: '#F8FAF8',
     gap: 6,
   },
   typeBtnPriveActive: {
@@ -260,17 +269,17 @@ const styles = StyleSheet.create({
     borderColor: Colors.secondary,
   },
   typeBtnExpenseActive: {
-    backgroundColor: Colors.primaryDark,
-    borderColor: Colors.primaryDark,
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
   },
   typeBtnText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
     color: Colors.textSecondary,
   },
   typeBtnTextActive: {
     color: '#FFFFFF',
-    fontWeight: 'bold',
+    fontWeight: '800',
   },
   descriptionText: {
     fontSize: 11,
@@ -280,44 +289,44 @@ const styles = StyleSheet.create({
   },
   formLabel: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
     color: Colors.textSecondary,
-    marginBottom: 4,
+    marginBottom: 5,
   },
   input: {
     borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 8,
+    borderColor: '#E5E9E6',
+    borderRadius: 12,
     paddingHorizontal: 12,
-    height: 42,
+    height: 44,
     fontSize: 14,
     color: Colors.text,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: '#F8FAF8',
   },
   saveBtn: {
     backgroundColor: Colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingVertical: 13,
+    borderRadius: 9999,
     marginTop: 14,
     gap: 6,
   },
   saveBtnText: {
     color: '#FFFFFF',
-    fontWeight: 'bold',
+    fontWeight: '800',
     fontSize: 15,
   },
   listHeaderContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingHorizontal: 18,
+    paddingTop: 18,
     paddingBottom: 8,
   },
   listTitle: {
     fontSize: 14,
-    fontWeight: 'bold',
-    color: Colors.textSecondary,
+    fontWeight: '800',
+    color: Colors.text,
   },
   listContent: {
     paddingHorizontal: 16,
@@ -325,23 +334,28 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 8,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#F0F3F1',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
   cardLeft: {
     flex: 1,
   },
   badge: {
     alignSelf: 'flex-start',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 9999,
     marginBottom: 4,
   },
   badgePrive: {
@@ -355,12 +369,12 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: 10,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: Colors.text,
   },
   cardNote: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
     color: Colors.text,
   },
   cardDate: {
@@ -374,7 +388,7 @@ const styles = StyleSheet.create({
   },
   cardAmount: {
     fontSize: 15,
-    fontWeight: 'bold',
+    fontWeight: '800',
     color: Colors.danger,
   },
   emptyContainer: {

@@ -90,7 +90,7 @@ export async function restockProduct(
   if (paymentSource === 'CASH_DRAWER') {
     const totalCost = Math.round(Number(qtyToAdd) * Number(buyPrice));
     if (totalCost > 0) {
-      const note = `Kulakan: ${productName} (${qtyToAdd} ${isKg ? 'kg' : 'item'} @ Rp ${buyPrice.toLocaleString('id-ID')})`;
+      const note = `Belanja Stok: ${productName} (${qtyToAdd} ${isKg ? 'kg' : 'item'} @ Rp ${buyPrice.toLocaleString('id-ID')})`;
       try {
         await db.runAsync(
           `INSERT INTO prive_expenses (type, amount, note) VALUES (?, ?, ?)`,
@@ -101,7 +101,7 @@ export async function restockProduct(
         try {
           await db.runAsync(
             `INSERT INTO prive_expenses (type, amount, note) VALUES (?, ?, ?)`,
-            ['EXPENSE', totalCost, `[KULAKAN] ${note}`]
+            ['EXPENSE', totalCost, `[BELANJA STOK] ${note}`]
           );
         } catch (err2) {
           console.error('Fallback insert failed:', err2);

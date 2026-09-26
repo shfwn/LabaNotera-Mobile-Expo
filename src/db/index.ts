@@ -81,6 +81,8 @@ export async function initDatabase(db: SQLiteDatabase) {
         bank_account_number TEXT,
         bank_account_holder TEXT,
         qris_image_uri TEXT,
+        closing_time TEXT DEFAULT '21:00',
+        last_report_date TEXT,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
     `);
@@ -88,6 +90,20 @@ export async function initDatabase(db: SQLiteDatabase) {
     // Migration: add is_kg column if missing in existing database
     try {
       await db.execAsync(`ALTER TABLE products ADD COLUMN is_kg INTEGER DEFAULT 0;`);
+    } catch (e) {
+      // Column already exists
+    }
+
+    // Migration: add closing_time column if missing in existing shop_profile
+    try {
+      await db.execAsync(`ALTER TABLE shop_profile ADD COLUMN closing_time TEXT DEFAULT '21:00';`);
+    } catch (e) {
+      // Column already exists
+    }
+
+    // Migration: add last_report_date column if missing in existing shop_profile
+    try {
+      await db.execAsync(`ALTER TABLE shop_profile ADD COLUMN last_report_date TEXT;`);
     } catch (e) {
       // Column already exists
     }
@@ -115,8 +131,8 @@ export async function initDatabase(db: SQLiteDatabase) {
     const profileCount = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM shop_profile');
     if (profileCount && profileCount.count === 0) {
       await db.execAsync(`
-        INSERT INTO shop_profile (shop_name, bank_name, bank_account_number, bank_account_holder) VALUES
-        ('Warung LabaNotera', 'BCA', '', '');
+        INSERT INTO shop_profile (shop_name, bank_name, bank_account_number, bank_account_holder, closing_time) VALUES
+        ('Warung LabaNotera', 'BCA', '', '', '21:00');
       `);
     }
 

@@ -10,11 +10,11 @@ import {
   Alert,
   ScrollView,
   Switch,
-  SafeAreaView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppSQLiteContext as useSQLiteContext } from '../../src/db/AppDatabaseProvider';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
-import { Product } from '../../src/types';
+import { Product, ProductCategory } from '../../src/types';
 import { getShadowStyle } from '../../src/utils/styleHelper';
 import {
   getProducts,
@@ -25,9 +25,9 @@ import {
   updateProductStock,
   restockProduct,
 } from '../../src/services/productService';
-import { formatRupiah, parseRupiahToNumber, isKgProduct } from '../../src/utils/formatters';
+import { formatRupiah, parseRupiahToNumber, isKgProduct, getProductCategory } from '../../src/utils/formatters';
 import { showAppAlert } from '../../src/utils/alertHelper';
-import { Colors } from '../../src/constants/theme';
+import { Colors, Radius, Shadows } from '../../src/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function StockScreen() {
@@ -37,7 +37,9 @@ export default function StockScreen() {
 
   const [products, setProducts] = useState<Product[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'ALL' | 'TITIPAN' | 'LOW_STOCK'>('ALL');
+  const [activeTab, setActiveTab] = useState<
+    'ALL' | 'SEMBAKO' | 'KONSUMSI' | 'SANITASI' | 'DIGITAL_KOMODITAS' | 'TITIPAN' | 'LOW_STOCK'
+  >('ALL');
 
   // Modal State
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -57,11 +59,10 @@ export default function StockScreen() {
   const [buyPrice, setBuyPrice] = useState('');
   const [sellPrice, setSellPrice] = useState('');
   const [stock, setStock] = useState('');
-  const [isKg, setIsKg] = useState(false);
+  const [category, setCategory] = useState<ProductCategory>('SEMBAKO');
   const [isConsignment, setIsConsignment] = useState(false);
   const [supplierName, setSupplierName] = useState('');
-  const [category, setCategory] = useState<'BARANG_POKOK' | 'SNACK' | 'MINUMAN'>('BARANG_POKOK');
-
+  const [isKg, setIsKg] = useState(false);
 
   const loadProducts = useCallback(async () => {
     try {
@@ -94,10 +95,10 @@ export default function StockScreen() {
     setBuyPrice('');
     setSellPrice('');
     setStock('10');
-    setIsKg(false);
+    setCategory('SEMBAKO');
     setIsConsignment(false);
     setSupplierName('');
-    setCategory('BARANG_POKOK');
+    setIsKg(false);
     setIsModalVisible(true);
   };
 
@@ -108,10 +109,10 @@ export default function StockScreen() {
     setBuyPrice('');
     setSellPrice('');
     setStock('10');
-    setIsKg(false);
+    setCategory('SEMBAKO');
     setIsConsignment(false);
     setSupplierName('');
-    setCategory('BARANG_POKOK');
+    setIsKg(false);
     setIsModalVisible(true);
   };
 
@@ -122,16 +123,21 @@ export default function StockScreen() {
     setBuyPrice(formatRupiah(product.buy_price));
     setSellPrice(formatRupiah(product.sell_price));
     setStock(product.stock.toString());
-    setIsKg(product.is_kg === 1 || isKgProduct(product));
+    setCategory(getProductCategory(product));
     setIsConsignment(product.is_consignment === 1);
     setSupplierName(product.supplier_name || '');
-    setCategory((product.category as any) || 'BARANG_POKOK');
+    setIsKg(isKgProduct(product));
     setIsModalVisible(true);
   };
 
   const handleSaveProduct = async () => {
     if (!name.trim()) {
       showAppAlert('Nama Barang Wajib', 'Mohon masukkan nama produk/barang.');
+      return;
+    }
+
+    if (isConsignment && !supplierName.trim()) {
+      showAppAlert('Nama Penitip Wajib', 'Mohon masukkan nama penitip / supplier mitra titipan.');
       return;
     }
 
@@ -154,7 +160,7 @@ export default function StockScreen() {
           sell_price: sellPriceNum,
           stock: stockNum,
           is_consignment: isConsignment ? 1 : 0,
-          supplier_name: isConsignment ? supplierName.trim() || null : null,
+          supplier_name: isConsignment ? (supplierName.trim() || 'Titipan Mitra') : null,
           category,
           is_kg: isKg ? 1 : 0,
         });
@@ -169,7 +175,7 @@ export default function StockScreen() {
           sell_price: sellPriceNum,
           stock: stockNum,
           is_consignment: isConsignment ? 1 : 0,
-          supplier_name: isConsignment ? supplierName.trim() || null : null,
+          supplier_name: isConsignment ? (supplierName.trim() || 'Titipan Mitra') : null,
           category,
           is_kg: isKg ? 1 : 0,
         });
@@ -202,7 +208,7 @@ export default function StockScreen() {
 
   const openRestockModal = (product: Product) => {
     setRestockProductTarget(product);
-    setRestockQty(isKgProduct(product) ? '5' : '10');
+    setRestockQty('10');
     setRestockBuyPrice(formatRupiah(product.buy_price));
     setRestockPaymentSource(product.is_consignment === 1 ? 'CONSIGNMENT' : 'CASH_DRAWER');
     setIsRestockModalVisible(true);
@@ -219,7 +225,7 @@ export default function StockScreen() {
 
     const buyPriceNum = parseRupiahToNumber(restockBuyPrice);
     if (buyPriceNum < 0) {
-      showAppAlert('Harga Beli Tidak Valid', 'Harga beli kulakan tidak boleh minus.');
+      showAppAlert('Harga Beli Tidak Valid', 'Harga beli modal tidak boleh minus.');
       return;
     }
 
@@ -232,16 +238,15 @@ export default function StockScreen() {
         buyPriceNum,
         restockPaymentSource,
         restockProductTarget.name,
-        isKgProduct(restockProductTarget)
+        restockProductTarget.is_consignment === 1
       );
 
-      const isKg = isKgProduct(restockProductTarget);
       const totalCost = Math.round(qtyNum * buyPriceNum);
-      let descMsg = `Stok ${restockProductTarget.name} berhasil ditambah +${qtyNum} ${isKg ? 'kg' : 'item'}.`;
+      let descMsg = `Stok ${restockProductTarget.name} berhasil ditambah +${qtyNum} ${restockProductTarget.is_kg === 1 ? 'kg' : 'item'}.`;
       if (restockPaymentSource === 'CASH_DRAWER' && totalCost > 0) {
-        descMsg += `\n\nPengeluaran kulakan ${formatRupiah(totalCost)} otomatis dicatat dari laci kasir.`;
+        descMsg += `\n\nPengeluaran belanja stok ${formatRupiah(totalCost)} otomatis dicatat dari laci kasir.`;
       } else if (restockPaymentSource === 'CONSIGNMENT') {
-        descMsg += `\n\nBarang titipan dicatat (pembayaran ke pemasok dihitung saat barang terjual).`;
+        descMsg += `\n\nPenerimaan barang titipan/konsinyasi berhasil dicatat tanpa memotong uang kasir sekarang.`;
       } else {
         descMsg += `\n\nPenyesuaian stok opname fisik selesai (tanpa transaksi uang kasir).`;
       }
@@ -264,10 +269,9 @@ export default function StockScreen() {
     }
 
     const step = 1;
-    const isKg = isKgProduct(product);
     showAppAlert(
       'Kurangi Stok Fisik',
-      `Kurangi stok "${product.name}" sebanyak 1 ${isKg ? 'kg' : 'item'}?\n\n(Catatan: Pengurangan cepat ini hanya untuk koreksi fisik barang rusak/hilang dan tidak mempengaruhi uang kasir).`,
+      `Kurangi stok "${product.name}" sebanyak 1 ${product.is_kg === 1 ? 'kg' : 'item'}?\n\n(Catatan: Pengurangan cepat ini hanya untuk koreksi fisik barang rusak/hilang dan tidak mempengaruhi uang kasir).`,
       [
         { text: 'Batal', style: 'cancel' },
         {
@@ -282,10 +286,17 @@ export default function StockScreen() {
     );
   };
 
-
   const displayedProducts = products.filter((p) => {
-    if (activeTab === 'TITIPAN') return p.is_consignment === 1;
     if (activeTab === 'LOW_STOCK') return p.stock < 5;
+    if (activeTab === 'TITIPAN') return p.is_consignment === 1;
+    if (
+      activeTab === 'SEMBAKO' ||
+      activeTab === 'KONSUMSI' ||
+      activeTab === 'SANITASI' ||
+      activeTab === 'DIGITAL_KOMODITAS'
+    ) {
+      return getProductCategory(p) === activeTab;
+    }
     return true;
   });
 
@@ -294,13 +305,13 @@ export default function StockScreen() {
       {/* Top Search & Add Bar */}
       <View style={styles.topBar}>
         <View style={styles.searchBox}>
-          <Ionicons name="search-outline" color={Colors.textMuted} size={18} />
+          <Ionicons name="search-outline" color="#64748B" size={18} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Cari produk / barcode / titipan..."
+            placeholder="Cari nama atau barcode produk..."
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor="#94A3B8"
           />
         </View>
 
@@ -312,35 +323,81 @@ export default function StockScreen() {
 
       {/* Filter Tabs */}
       <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tabChip, activeTab === 'ALL' && styles.tabChipActive]}
-          onPress={() => setActiveTab('ALL')}
-          activeOpacity={0.7}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabScrollContent}
         >
-          <Text style={[styles.tabChipText, activeTab === 'ALL' && styles.tabChipTextActive]}>
-            Semua ({products.length})
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabChip, activeTab === 'ALL' && styles.tabChipActive]}
+            onPress={() => setActiveTab('ALL')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.tabChipText, activeTab === 'ALL' && styles.tabChipTextActive]}>
+              Semua ({products.length})
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.tabChip, activeTab === 'TITIPAN' && styles.tabChipActive]}
-          onPress={() => setActiveTab((prev) => (prev === 'TITIPAN' ? 'ALL' : 'TITIPAN'))}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.tabChipText, activeTab === 'TITIPAN' && styles.tabChipTextActive]}>
-            Titipan ({products.filter((p) => p.is_consignment === 1).length})
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabChip, activeTab === 'SEMBAKO' && styles.tabChipActive]}
+            onPress={() => setActiveTab((prev) => (prev === 'SEMBAKO' ? 'ALL' : 'SEMBAKO'))}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.tabChipText, activeTab === 'SEMBAKO' && styles.tabChipTextActive]}>
+              Bahan Pokok & Sembako
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.tabChip, activeTab === 'LOW_STOCK' && styles.tabChipActive]}
-          onPress={() => setActiveTab((prev) => (prev === 'LOW_STOCK' ? 'ALL' : 'LOW_STOCK'))}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.tabChipText, activeTab === 'LOW_STOCK' && styles.tabChipTextActive]}>
-            Stok Menipis ({products.filter((p) => p.stock < 5).length})
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabChip, activeTab === 'KONSUMSI' && styles.tabChipActive]}
+            onPress={() => setActiveTab((prev) => (prev === 'KONSUMSI' ? 'ALL' : 'KONSUMSI'))}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.tabChipText, activeTab === 'KONSUMSI' && styles.tabChipTextActive]}>
+              Makanan & Minuman
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabChip, activeTab === 'SANITASI' && styles.tabChipActive]}
+            onPress={() => setActiveTab((prev) => (prev === 'SANITASI' ? 'ALL' : 'SANITASI'))}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.tabChipText, activeTab === 'SANITASI' && styles.tabChipTextActive]}>
+              Rumah & Sanitasi
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabChip, activeTab === 'DIGITAL_KOMODITAS' && styles.tabChipActive]}
+            onPress={() => setActiveTab((prev) => (prev === 'DIGITAL_KOMODITAS' ? 'ALL' : 'DIGITAL_KOMODITAS'))}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.tabChipText, activeTab === 'DIGITAL_KOMODITAS' && styles.tabChipTextActive]}>
+              Komoditas & Digital
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabChip, activeTab === 'TITIPAN' && styles.tabChipActive]}
+            onPress={() => setActiveTab((prev) => (prev === 'TITIPAN' ? 'ALL' : 'TITIPAN'))}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.tabChipText, activeTab === 'TITIPAN' && styles.tabChipTextActive]}>
+              Barang Titipan ({products.filter((p) => p.is_consignment === 1).length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabChip, activeTab === 'LOW_STOCK' && styles.tabChipActive]}
+            onPress={() => setActiveTab((prev) => (prev === 'LOW_STOCK' ? 'ALL' : 'LOW_STOCK'))}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.tabChipText, activeTab === 'LOW_STOCK' && styles.tabChipTextActive]}>
+              Stok Menipis ({products.filter((p) => p.stock < 5).length})
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
       </View>
 
       {/* Product Stock List */}
@@ -358,20 +415,20 @@ export default function StockScreen() {
                 <View style={{ flex: 1 }}>
                   <View style={styles.titleRow}>
                     <Text style={styles.productTitle}>{item.name}</Text>
-                    {isKgProduct(item) ? (
+                    {isKgProduct(item) && (
                       <View style={styles.tagKg}>
-                        <Ionicons name="scale-outline" color="#059669" size={12} />
-                        <Text style={styles.tagKgText}>Timbangan / Kiloan</Text>
+                        <Ionicons name="scale-outline" size={11} color="#0D9488" />
+                        <Text style={styles.tagKgText}>Timbangan (Kg)</Text>
                       </View>
-                    ) : null}
-                    {item.is_consignment === 1 ? (
+                    )}
+                    {item.is_consignment === 1 && (
                       <View style={styles.tagConsignment}>
-                        <Ionicons name="people-outline" color={Colors.secondary} size={12} />
+                        <Ionicons name="people-outline" size={11} color="#D97706" />
                         <Text style={styles.tagConsignmentText}>
-                          Titipan {item.supplier_name ? `(${item.supplier_name})` : ''}
+                          Titipan: {item.supplier_name || 'Mitra'}
                         </Text>
                       </View>
-                    ) : null}
+                    )}
                   </View>
                   {item.barcode ? (
                     <Text style={styles.barcodeText}>Barcode: {item.barcode}</Text>
@@ -384,13 +441,13 @@ export default function StockScreen() {
                     style={styles.iconBtn}
                     onPress={() => openEditModal(item)}
                   >
-                    <Ionicons name="pencil" color={Colors.primaryDark} size={16} />
+                    <Ionicons name="pencil" color={Colors.primary} size={16} />
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.iconBtn, { backgroundColor: Colors.dangerLight }]}
+                    style={[styles.iconBtn, { backgroundColor: '#FEE2E2' }]}
                     onPress={() => handleDelete(item)}
                   >
-                    <Ionicons name="trash-outline" color={Colors.danger} size={16} />
+                    <Ionicons name="trash-outline" color="#DC2626" size={16} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -406,14 +463,14 @@ export default function StockScreen() {
 
                 <View style={styles.detailCol}>
                   <Text style={styles.detailLabel}>Harga Jual</Text>
-                  <Text style={[styles.detailValue, { color: Colors.primaryDark, fontWeight: 'bold' }]}>
-                    {formatRupiah(item.sell_price)} {isKgProduct(item) ? '/ kg' : ''}
+                  <Text style={[styles.detailValue, { color: Colors.primary, fontWeight: 'bold' }]}>
+                    {formatRupiah(item.sell_price)}
                   </Text>
                 </View>
 
                 <View style={styles.detailCol}>
                   <Text style={styles.detailLabel}>Laba Untung</Text>
-                  <Text style={[styles.detailValue, { color: Colors.success, fontWeight: 'bold' }]}>
+                  <Text style={[styles.detailValue, { color: '#16A34A', fontWeight: 'bold' }]}>
                     +{formatRupiah(margin)} ({marginPercent}%)
                   </Text>
                 </View>
@@ -426,10 +483,10 @@ export default function StockScreen() {
                   <Text
                     style={[
                       styles.stockCount,
-                      item.stock < 5 ? { color: Colors.danger } : { color: Colors.text },
+                      item.stock < 5 ? { color: '#DC2626' } : { color: Colors.text },
                     ]}
                   >
-                    {item.stock} {isKgProduct(item) ? 'kg' : 'item'}
+                    {item.stock} {item.is_kg === 1 ? 'kg' : 'item'}
                   </Text>
                 </Text>
 
@@ -456,7 +513,7 @@ export default function StockScreen() {
         }}
         ListEmptyComponent={
           <View style={styles.emptyBox}>
-            <Ionicons name="cube-outline" color={Colors.textMuted} size={48} />
+            <Ionicons name="cube-outline" color="#94A3B8" size={48} />
             <Text style={styles.emptyTitle}>Belum Ada Produk</Text>
             <Text style={styles.emptySub}>Klik tombol "Tambah" untuk mendaftarkan barang baru.</Text>
           </View>
@@ -508,8 +565,40 @@ export default function StockScreen() {
                 style={styles.input}
                 placeholder="Contoh: Minyak Goreng Bimoli 1L"
                 value={name}
-                onChangeText={setName}
+                onChangeText={(text) => {
+                  setName(text);
+                  if (!editingProduct && text.length > 2) {
+                    setCategory(getProductCategory({ name: text }));
+                  }
+                }}
               />
+
+              {/* Product Category Selector */}
+              <Text style={styles.formLabel}>Kategori Barang:</Text>
+              <View style={styles.categoryPillsGrid}>
+                {[
+                  { key: 'SEMBAKO', label: 'Bahan Pokok & Sembako' },
+                  { key: 'KONSUMSI', label: 'Makanan & Minuman' },
+                  { key: 'SANITASI', label: 'Rumah & Sanitasi' },
+                  { key: 'DIGITAL_KOMODITAS', label: 'Komoditas & Digital' },
+                ].map((item) => (
+                  <TouchableOpacity
+                    key={item.key}
+                    style={[styles.categoryFormPill, category === item.key && styles.categoryFormPillActive]}
+                    onPress={() => setCategory(item.key as ProductCategory)}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.categoryFormPillText,
+                        category === item.key && styles.categoryFormPillTextActive,
+                      ]}
+                    >
+                      {item.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
               {/* Pricing Inputs */}
               <View style={styles.rowTwoCols}>
@@ -546,54 +635,52 @@ export default function StockScreen() {
                 onChangeText={setStock}
               />
 
-              {/* Consignment Switch */}
-              <View style={styles.switchRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.switchTitle}>Barang Titipan / Konsinyasi</Text>
-                  <Text style={styles.switchSub}>
-                    Aktifkan jika barang ini titipan dari tetangga/mitra usaha (gorengan, kue, kerupuk).
-                  </Text>
-                </View>
-                <Switch
-                  value={isConsignment}
-                  onValueChange={setIsConsignment}
-                  trackColor={{ false: '#CBD5E1', true: Colors.primaryLight }}
-                  thumbColor={isConsignment ? Colors.primary : '#94A3B8'}
-                />
-              </View>
-
-              {/* Kiloan / Timbangan Switch */}
-              <View style={styles.switchRow}>
-                <View style={{ flex: 1, marginRight: 10 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Ionicons name="scale-outline" size={18} color={isKg ? '#047857' : Colors.text} />
-                    <Text style={styles.switchTitle}>Barang Timbangan / Kiloan</Text>
-                  </View>
-                  <Text style={styles.switchSub}>
-                    {isKg
-                      ? 'Aktif: Di kasir otomatis tersedia opsi 1/4 kg, 1/2 kg, 3/4 kg, timbangan manual, atau beli nominal uang (misal beli Rp 10.000).'
-                      : 'Nonaktif: Barang dijual per satuan / pcs biasa.'}
+              {/* Kg Toggle */}
+              <View style={styles.switchRowCard}>
+                <View style={{ flex: 1, paddingRight: 10 }}>
+                  <Text style={styles.switchTitle}>Jual Satuan Timbangan (Kg)</Text>
+                  <Text style={styles.switchSubtitle}>
+                    Aktifkan jika produk ini ditimbang saat dijual (bisa beli 1/4 kg, 1/2 kg, atau nominal Rp di kasir).
                   </Text>
                 </View>
                 <Switch
                   value={isKg}
                   onValueChange={setIsKg}
-                  trackColor={{ false: '#CBD5E1', true: '#A7F3D0' }}
-                  thumbColor={isKg ? '#059669' : '#94A3B8'}
+                  trackColor={{ false: Colors.border, true: Colors.primary }}
+                  thumbColor={isKg ? '#FFFFFF' : '#F4F3F4'}
                 />
               </View>
 
-              {isConsignment ? (
-                <View style={styles.consignmentBox}>
-                  <Text style={styles.formLabel}>Nama Pemilik / Pemasok Titipan:</Text>
+              {/* Consignment Toggle */}
+              <View style={styles.switchRowCard}>
+                <View style={{ flex: 1, paddingRight: 10 }}>
+                  <Text style={styles.switchTitle}>Barang Titipan (Konsinyasi)</Text>
+                  <Text style={styles.switchSubtitle}>
+                    Aktifkan jika barang titipan milik mitra/penitip (bayar bagi hasil setelah laku terjual).
+                  </Text>
+                </View>
+                <Switch
+                  value={isConsignment}
+                  onValueChange={setIsConsignment}
+                  trackColor={{ false: Colors.border, true: Colors.primary }}
+                  thumbColor={isConsignment ? '#FFFFFF' : '#F4F3F4'}
+                />
+              </View>
+
+              {isConsignment && (
+                <View style={styles.consignmentInputBox}>
+                  <Text style={styles.formLabel}>Nama Penitip / Supplier Mitra (Wajib):</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="Contoh: Bu Agus / Pak RT"
+                    placeholder="Contoh: Bu Siti (Kue Basah), Pak Joko (Kerupuk)"
                     value={supplierName}
                     onChangeText={setSupplierName}
                   />
+                  <Text style={styles.inputHelperText}>
+                    * Digunakan untuk mencatat daftar hutang titipan saat barang laku terjual.
+                  </Text>
                 </View>
-              ) : null}
+              )}
             </ScrollView>
 
             <TouchableOpacity style={styles.saveBtn} onPress={handleSaveProduct}>
@@ -603,7 +690,7 @@ export default function StockScreen() {
         </View>
       </Modal>
 
-      {/* Smart Restock / Kulakan Modal */}
+      {/* Smart Restock Modal */}
       <Modal
         visible={isRestockModalVisible}
         animationType="slide"
@@ -614,8 +701,8 @@ export default function StockScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.modalTitle}>Tambah Stok / Kulakan</Text>
-                <Text style={styles.modalSubTitle}>Kelola stok masuk & pencatatan dana warung</Text>
+                <Text style={styles.modalTitle}>Tambah Stok Barang</Text>
+                <Text style={styles.modalSubTitle}>Kelola stok masuk & pencatatan belanja modal</Text>
               </View>
               <TouchableOpacity onPress={() => setIsRestockModalVisible(false)}>
                 <Ionicons name="close" color={Colors.text} size={24} />
@@ -628,10 +715,10 @@ export default function StockScreen() {
                   <Text style={styles.restockProductName}>{restockProductTarget.name}</Text>
                   <View style={styles.restockMetaRow}>
                     <Text style={styles.restockMetaText}>
-                      Stok saat ini: <Text style={{ fontWeight: 'bold', color: Colors.text }}>{restockProductTarget.stock} {isKgProduct(restockProductTarget) ? 'kg' : 'item'}</Text>
+                      Stok saat ini: <Text style={{ fontWeight: 'bold', color: Colors.text }}>{restockProductTarget.stock} {restockProductTarget.is_kg === 1 ? 'kg' : 'item'}</Text>
                     </Text>
                     <Text style={styles.restockMetaText}>
-                      Harga Jual: <Text style={{ fontWeight: 'bold', color: Colors.primaryDark }}>{formatRupiah(restockProductTarget.sell_price)}</Text>
+                      Harga Jual: <Text style={{ fontWeight: 'bold', color: Colors.primary }}>{formatRupiah(restockProductTarget.sell_price)}</Text>
                     </Text>
                   </View>
                 </View>
@@ -639,7 +726,7 @@ export default function StockScreen() {
 
               {/* Quantity input & quick chips */}
               <Text style={styles.formLabel}>
-                Jumlah Stok Masuk ({restockProductTarget && isKgProduct(restockProductTarget) ? 'Kg' : 'Item/Pcs'}):
+                Jumlah Stok Masuk ({restockProductTarget?.is_kg === 1 ? 'Kg' : 'Item/Pcs'}):
               </Text>
               <TextInput
                 style={styles.input}
@@ -651,10 +738,7 @@ export default function StockScreen() {
 
               {/* Quick Qty Chips */}
               <View style={styles.quickQtyRow}>
-                {(restockProductTarget && isKgProduct(restockProductTarget)
-                  ? ['1', '2', '5', '10', '25', '50']
-                  : ['1', '5', '10', '20', '50', '100']
-                ).map((val) => (
+                {['5', '10', '20', '50', '100'].map((val) => (
                   <TouchableOpacity
                     key={val}
                     style={[
@@ -669,7 +753,7 @@ export default function StockScreen() {
                         restockQty === val && styles.quickQtyChipTextActive,
                       ]}
                     >
-                      +{val} {restockProductTarget && isKgProduct(restockProductTarget) ? 'kg' : ''}
+                      +{val}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -677,7 +761,7 @@ export default function StockScreen() {
 
               {/* Buy Price / HPP input */}
               <Text style={[styles.formLabel, { marginTop: 12 }]}>
-                Harga Beli Satuan / HPP Kulakan (Rp):
+                Harga Beli Satuan / Modal (Rp):
               </Text>
               <TextInput
                 style={styles.input}
@@ -687,7 +771,7 @@ export default function StockScreen() {
                 onChangeText={(t) => setRestockBuyPrice(formatRupiah(t))}
               />
               <Text style={styles.inputHelperText}>
-                Harga beli kulakan per {restockProductTarget && isKgProduct(restockProductTarget) ? 'kg' : 'item'}.
+                Harga beli modal per {restockProductTarget?.is_kg === 1 ? 'kg' : 'item'} barang.
               </Text>
 
               {/* Restock Cost Summary */}
@@ -698,11 +782,11 @@ export default function StockScreen() {
                 return (
                   <View style={styles.restockSummaryBox}>
                     <View style={styles.restockSummaryRow}>
-                      <Text style={styles.restockSummaryLabel}>Estimasi Total Biaya Kulakan:</Text>
+                      <Text style={styles.restockSummaryLabel}>Estimasi Total Biaya Belanja Stok:</Text>
                       <Text style={styles.restockSummaryValue}>{formatRupiah(total)}</Text>
                     </View>
                     <Text style={styles.restockSummaryFormula}>
-                      ({q} {restockProductTarget && isKgProduct(restockProductTarget) ? 'kg' : 'item'} x {formatRupiah(p)})
+                      ({q} {restockProductTarget?.is_kg === 1 ? 'kg' : 'item'} x {formatRupiah(p)})
                     </Text>
                   </View>
                 );
@@ -710,7 +794,7 @@ export default function StockScreen() {
 
               {/* Payment Source Options */}
               <Text style={[styles.formLabel, { marginTop: 14, marginBottom: 8 }]}>
-                Sumber Dana / Cara Pembayaran Kulakan:
+                Sumber Dana / Cara Pembayaran Belanja Stok:
               </Text>
 
               {/* Option 1: Cash Drawer */}
@@ -727,7 +811,7 @@ export default function StockScreen() {
                     <Ionicons
                       name="wallet-outline"
                       size={20}
-                      color={restockPaymentSource === 'CASH_DRAWER' ? Colors.primary : Colors.textMuted}
+                      color={restockPaymentSource === 'CASH_DRAWER' ? Colors.primary : '#64748B'}
                     />
                   </View>
                   <View style={{ flex: 1 }}>
@@ -740,7 +824,7 @@ export default function StockScreen() {
                       Bayar Pakai Uang Laci Kasir Sekarang
                     </Text>
                     <Text style={styles.paymentOptionSub}>
-                      Otomatis mencatat pengeluaran kulakan dari kas warung & mengurangi sisa uang fisik di laci kasir.
+                      Otomatis mencatat pengeluaran belanja stok dari kas warung & mengurangi sisa uang fisik di laci kasir.
                     </Text>
                   </View>
                   <View
@@ -764,11 +848,11 @@ export default function StockScreen() {
                 activeOpacity={0.8}
               >
                 <View style={styles.paymentOptionHeader}>
-                  <View style={styles.paymentOptionIconWrap}>
+                  <View style={[styles.paymentOptionIconWrap, { backgroundColor: '#FEF3C7' }]}>
                     <Ionicons
                       name="people-outline"
                       size={20}
-                      color={restockPaymentSource === 'CONSIGNMENT' ? Colors.secondary : Colors.textMuted}
+                      color={restockPaymentSource === 'CONSIGNMENT' ? '#D97706' : '#92400E'}
                     />
                   </View>
                   <View style={{ flex: 1 }}>
@@ -778,10 +862,10 @@ export default function StockScreen() {
                         restockPaymentSource === 'CONSIGNMENT' && styles.paymentOptionTitleActive,
                       ]}
                     >
-                      Barang Titipan / Bayar Nanti Saat Laku
+                      Barang Titipan / Konsinyasi (Bayar Nanti Saat Laku)
                     </Text>
                     <Text style={styles.paymentOptionSub}>
-                      Tidak memotong uang kas sekarang. Pembayaran bagi hasil ke pemasok dihitung nanti saat barang terjual.
+                      Stok bertambah tanpa memotong uang kasir sekarang. Bagi hasil dihitung otomatis saat barang terjual di kasir.
                     </Text>
                   </View>
                   <View
@@ -809,7 +893,7 @@ export default function StockScreen() {
                     <Ionicons
                       name="sync-outline"
                       size={20}
-                      color={restockPaymentSource === 'CORRECTION_ONLY' ? Colors.textSecondary : Colors.textMuted}
+                      color={restockPaymentSource === 'CORRECTION_ONLY' ? Colors.primary : '#64748B'}
                     />
                   </View>
                   <View style={{ flex: 1 }}>
@@ -858,79 +942,109 @@ const styles = StyleSheet.create({
   },
   topBar: {
     flexDirection: 'row',
-    padding: 12,
-    gap: 8,
-    backgroundColor: Colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 10,
+    alignItems: 'center',
   },
   searchBox: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    height: 42,
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 14,
+    height: 46,
+    ...Shadows.soft,
   },
   searchInput: {
     flex: 1,
     marginLeft: 8,
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.text,
   },
   addBtn: {
     backgroundColor: Colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    borderRadius: 8,
+    paddingHorizontal: 16,
+    height: 46,
+    borderRadius: Radius.full,
     gap: 4,
+    ...Shadows.glow(0.2),
   },
   addBtnText: {
     color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 14,
+    fontWeight: '700',
+    fontSize: 13,
   },
   tabContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    gap: 6,
+    paddingVertical: 6,
+  },
+  tabScrollContent: {
+    paddingHorizontal: 16,
+    gap: 8,
   },
   tabChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: Colors.border,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.categoryInactive,
   },
   tabChipActive: {
-    backgroundColor: Colors.primaryDark,
-    borderColor: Colors.primaryDark,
+    backgroundColor: Colors.categoryActive,
   },
   tabChipText: {
     fontSize: 12,
-    color: Colors.textSecondary,
-    fontWeight: '500',
+    color: Colors.categoryInactiveText,
+    fontWeight: '600',
   },
   tabChipTextActive: {
     color: '#FFFFFF',
-    fontWeight: 'bold',
+    fontWeight: '700',
+  },
+  categoryPillsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+    marginTop: 2,
+  },
+  categoryFormPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: Radius.full,
+    backgroundColor: '#F1F5F2',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  categoryFormPillActive: {
+    backgroundColor: Colors.primaryLight,
+    borderColor: Colors.primary,
+  },
+  categoryFormPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  categoryFormPillTextActive: {
+    color: Colors.primary,
+    fontWeight: '800',
   },
   listContent: {
-    padding: 12,
+    padding: 16,
     paddingBottom: 40,
   },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
+    borderRadius: Radius.xl2,
+    padding: 16,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
-    ...getShadowStyle(1),
+    borderColor: Colors.borderLight,
+    ...Shadows.card,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -944,8 +1058,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   productTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 15,
+    fontWeight: '700',
     color: Colors.text,
   },
   tagConsignment: {
@@ -953,30 +1067,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     backgroundColor: Colors.secondaryLight,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
   },
   tagConsignmentText: {
-    fontSize: 11,
+    fontSize: 10,
     color: Colors.secondary,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   tagKg: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
+    backgroundColor: Colors.successLight,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
   },
   tagKgText: {
-    fontSize: 11,
-    color: '#059669',
-    fontWeight: 'bold',
+    fontSize: 10,
+    color: Colors.success,
+    fontWeight: '700',
   },
   barcodeText: {
     fontSize: 11,
@@ -990,20 +1102,20 @@ const styles = StyleSheet.create({
   iconBtn: {
     width: 32,
     height: 32,
-    borderRadius: 6,
+    borderRadius: Radius.full,
     backgroundColor: Colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
   cardDivider: {
     height: 1,
-    backgroundColor: '#F1F5F9',
-    marginVertical: 10,
+    backgroundColor: '#F3F4F6',
+    marginVertical: 12,
   },
   detailsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   detailCol: {
     flex: 1,
@@ -1016,14 +1128,15 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.text,
     marginTop: 2,
+    fontWeight: '600',
   },
   stockStepperRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    padding: 8,
-    borderRadius: 8,
+    backgroundColor: Colors.primarySoft,
+    padding: 10,
+    borderRadius: Radius.lg,
   },
   stockStepperLabel: {
     fontSize: 13,
@@ -1031,7 +1144,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   stockCount: {
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   stepperContainer: {
     flexDirection: 'row',
@@ -1039,12 +1152,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   stepperBtn: {
-    width: 30,
-    height: 30,
+    width: 32,
+    height: 32,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: 6,
+    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1054,12 +1167,12 @@ const styles = StyleSheet.create({
   },
   stepperBtnText: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: Colors.text,
   },
   stepperValue: {
-    fontSize: 15,
-    fontWeight: 'bold',
+    fontSize: 14,
+    fontWeight: '700',
     minWidth: 24,
     textAlign: 'center',
   },
@@ -1069,7 +1182,7 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: Colors.textSecondary,
     marginTop: 12,
   },
@@ -1081,28 +1194,29 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
     justifyContent: 'flex-end',
   },
   modalContent: {
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: Radius.xl3,
+    borderTopRightRadius: Radius.xl3,
     maxHeight: '90%',
-    padding: 16,
+    padding: 20,
+    paddingBottom: 24,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: Colors.borderLight,
     paddingBottom: 12,
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '800',
     color: Colors.text,
   },
   modalSubTitle: {
@@ -1128,9 +1242,9 @@ const styles = StyleSheet.create({
   input: {
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: 8,
+    borderRadius: Radius.lg,
     paddingHorizontal: 12,
-    height: 42,
+    height: 44,
     fontSize: 14,
     color: Colors.text,
     backgroundColor: '#FAFAFA',
@@ -1140,12 +1254,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   scanShortcutBtn: {
-    backgroundColor: Colors.primaryDark,
-    width: 42,
-    height: 42,
-    borderRadius: 8,
+    backgroundColor: Colors.primary,
+    width: 44,
+    height: 44,
+    borderRadius: Radius.lg,
     justifyContent: 'center',
     alignItems: 'center',
+    ...Shadows.glow(0.18),
   },
   rowTwoCols: {
     flexDirection: 'row',
@@ -1155,14 +1270,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginVertical: 14,
-    padding: 10,
+    marginVertical: 8,
+    padding: 12,
     backgroundColor: '#F8FAFC',
-    borderRadius: 8,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  switchRowCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+    padding: 12,
+    backgroundColor: '#F8FAFC',
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
   },
   switchTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
+    fontSize: 13,
+    fontWeight: '700',
     color: Colors.text,
   },
   switchSub: {
@@ -1170,35 +1298,50 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     marginTop: 2,
   },
+  switchSubtitle: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginTop: 2,
+    lineHeight: 15,
+  },
   consignmentBox: {
     backgroundColor: Colors.secondaryLight,
-    padding: 10,
-    borderRadius: 8,
+    padding: 12,
+    borderRadius: Radius.lg,
     marginBottom: 10,
+  },
+  consignmentInputBox: {
+    backgroundColor: '#FFFBEB',
+    padding: 12,
+    borderRadius: Radius.lg,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
   },
   saveBtn: {
     backgroundColor: Colors.primary,
-    paddingVertical: 14,
-    borderRadius: 10,
+    paddingVertical: 15,
+    borderRadius: Radius.full,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 10,
+    ...Shadows.glow(0.2),
   },
   saveBtnText: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 15,
+    fontWeight: '800',
   },
   restockProductCard: {
     backgroundColor: '#F8FAFC',
-    padding: 12,
-    borderRadius: 8,
+    padding: 14,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: Colors.border,
     marginBottom: 10,
   },
   restockProductName: {
     fontSize: 15,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: Colors.text,
   },
   restockMetaRow: {
@@ -1217,9 +1360,9 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   quickQtyChip: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: Radius.full,
     backgroundColor: '#F1F5F9',
     borderWidth: 1,
     borderColor: Colors.border,
@@ -1235,14 +1378,14 @@ const styles = StyleSheet.create({
   },
   quickQtyChipTextActive: {
     color: Colors.primaryDark,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   restockSummaryBox: {
-    backgroundColor: '#F0FDF4',
-    padding: 12,
-    borderRadius: 8,
+    backgroundColor: Colors.primarySoft,
+    padding: 14,
+    borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: '#BBF7D0',
+    borderColor: Colors.primaryLight,
     marginTop: 12,
   },
   restockSummaryRow: {
@@ -1253,29 +1396,29 @@ const styles = StyleSheet.create({
   restockSummaryLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#166534',
+    color: Colors.primaryDark,
   },
   restockSummaryValue: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#15803d',
+    fontWeight: '800',
+    color: Colors.primaryDark,
   },
   restockSummaryFormula: {
     fontSize: 11,
-    color: '#15803d',
+    color: Colors.primaryDark,
     marginTop: 2,
   },
   paymentOptionCard: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
     borderColor: Colors.border,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     padding: 12,
     marginBottom: 8,
   },
   paymentOptionCardActive: {
     borderColor: Colors.primary,
-    backgroundColor: '#F0FDFA',
+    backgroundColor: Colors.primarySoft,
   },
   paymentOptionHeader: {
     flexDirection: 'row',
@@ -1285,7 +1428,7 @@ const styles = StyleSheet.create({
   paymentOptionIconWrap: {
     width: 32,
     height: 32,
-    borderRadius: 8,
+    borderRadius: Radius.full,
     backgroundColor: '#F1F5F9',
     justifyContent: 'center',
     alignItems: 'center',
@@ -1293,7 +1436,7 @@ const styles = StyleSheet.create({
   },
   paymentOptionTitle: {
     fontSize: 13,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: Colors.text,
   },
   paymentOptionTitleActive: {

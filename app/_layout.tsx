@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Platform } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -7,6 +8,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as SplashScreen from 'expo-splash-screen';
 import { AppSQLiteProvider } from '../src/db/AppDatabaseProvider';
 import { Colors } from '../src/constants/theme';
+import CustomAlertModal from '../src/components/CustomAlertModal';
+import GlobalClosingReminder from '../src/components/GlobalClosingReminder';
 
 // Prevent splash screen from auto-hiding before asset loading is complete
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -39,44 +42,48 @@ export default function RootLayout() {
   }, [fontsLoaded, fontError]);
 
   return (
-    <AppSQLiteProvider>
-      <StatusBar style="light" />
-      <Stack
-        screenOptions={{
-          headerStyle: {
-            backgroundColor: Colors.primaryDark,
-          },
-          headerTintColor: '#FFFFFF',
-          headerTitleStyle: {
-            fontWeight: 'bold',
-          },
-        }}
-      >
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="scanner"
-          options={{
-            presentation: 'modal',
-            title: 'Scan Barcode Produk',
-            headerBackTitle: 'Batal',
+    <SafeAreaProvider>
+      <AppSQLiteProvider>
+        <StatusBar style="light" />
+        <Stack
+          screenOptions={{
+            headerStyle: {
+              backgroundColor: Colors.primaryDark,
+            },
+            headerTintColor: '#FFFFFF',
+            headerTitleStyle: {
+              fontWeight: 'bold',
+            },
           }}
-        />
-        <Stack.Screen
-          name="prive-modal"
-          options={{
-            presentation: 'modal',
-            title: 'Catat Uang Dapur & Biaya',
-            headerBackTitle: 'Tutup',
-          }}
-        />
-        <Stack.Screen
-          name="receipt/[id]"
-          options={{
-            title: 'Struk Transaksi',
-            headerBackTitle: 'Kembali',
-          }}
-        />
-      </Stack>
-    </AppSQLiteProvider>
+        >
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="scanner"
+            options={{
+              presentation: 'modal',
+              title: 'Scan Barcode Produk',
+              headerBackTitle: 'Batal',
+            }}
+          />
+          <Stack.Screen
+            name="prive-modal"
+            options={{
+              presentation: 'modal',
+              title: 'Catat Uang Dapur & Biaya',
+              headerBackTitle: 'Tutup',
+            }}
+          />
+          <Stack.Screen
+            name="receipt/[id]"
+            options={{
+              title: 'Struk Transaksi',
+              headerBackTitle: 'Kembali',
+            }}
+          />
+        </Stack>
+        <GlobalClosingReminder />
+        <CustomAlertModal />
+      </AppSQLiteProvider>
+    </SafeAreaProvider>
   );
 }

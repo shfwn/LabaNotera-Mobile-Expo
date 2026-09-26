@@ -1,23 +1,76 @@
 export const Colors = {
-  primary: '#0D9488',       // Emerald / Teal Primary
-  primaryDark: '#0F766E',   // Darker Teal for headers / buttons
-  primaryLight: '#CCFBF1',  // Soft Teal for active badges & backgrounds
-  accent: '#10B981',        // Vibrant Emerald
-  secondary: '#F59E0B',     // Amber Warm Accent (Prive / Warning)
+  // Kupa Brand Palette - Forest Emerald Green
+  primary: '#236B43',
+  primaryDark: '#1A5333',
+  primaryLight: '#E8F5E9',
+  primarySoft: '#F4F9F5',
+  accent: '#2D8A56',
+  
+  // Dynamic opacity helper
+  bgColor: (opacity: number = 1) => `rgba(35, 107, 67, ${opacity})`,
+
+  // Secondary Accents & Warning
+  secondary: '#D97706',
   secondaryLight: '#FEF3C7',
-  danger: '#EF4444',        // Red for Utang / Stock Low
+  
+  // Status Colors
+  danger: '#EF4444',
   dangerLight: '#FEE2E2',
-  warning: '#D97706',       // Deep Amber for partial/short payment
+  warning: '#F59E0B',
   warningLight: '#FEF3C7',
-  success: '#16A34A',       // Green for Paid / Profit
-  successLight: '#DCFCE7',
-  background: '#F8FAFC',    // App Light Background
+  success: '#236B43',
+  successLight: '#E8F5E9',
+  
+  // Surfaces & Text (Light Mode)
+  background: '#F8FAF8',
   card: '#FFFFFF',
-  text: '#0F172A',
-  textSecondary: '#475569',
-  textMuted: '#94A3B8',
+  text: '#1A202C',
+  textSecondary: '#718096',
+  textMuted: '#A0AEC0',
   border: '#E2E8F0',
-  shadow: 'rgba(15, 23, 42, 0.08)',
+  borderLight: '#EDF2F7',
+  
+  // Category Pill States
+  categoryActive: '#236B43',
+  categoryInactive: '#F0F4F1',
+  categoryActiveText: '#FFFFFF',
+  categoryInactiveText: '#718096',
+  shadow: 'rgba(0, 0, 0, 0.08)',
+};
+
+export const Radius = {
+  full: 9999,
+  xl3: 28,
+  xl2: 20,
+  xl: 16,
+  lg: 12,
+  md: 8,
+};
+
+export const Shadows = {
+  glow: (opacity: number = 0.2, color: string = 'rgba(35, 107, 67, 1)') => ({
+    shadowColor: color.startsWith('#')
+      ? color
+      : `rgba(35, 107, 67, ${opacity})`,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: opacity,
+    shadowRadius: 6,
+    elevation: 4,
+  }),
+  card: {
+    shadowColor: 'rgba(0, 0, 0, 0.04)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  soft: {
+    shadowColor: 'rgba(0, 0, 0, 0.03)',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
 };
 
 export const Fonts = {

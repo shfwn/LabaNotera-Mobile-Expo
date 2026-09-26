@@ -5,8 +5,8 @@ import {
   View,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppSQLiteContext as useSQLiteContext } from '../../src/db/AppDatabaseProvider';
 import { Tabs, useRouter, useFocusEffect } from 'expo-router';
 import { DailyFinancialSummary, Transaction, ShopProfile } from '../../src/types';
@@ -15,6 +15,7 @@ import { getRecentTransactions } from '../../src/services/posService';
 import { getShopProfile } from '../../src/services/profileService';
 import ProfileModal from '../../src/components/ProfileModal';
 import { formatRupiah, formatTanggal, getTransactionReceivedAmount } from '../../src/utils/formatters';
+import { checkAndPromptClosingReminder } from '../../src/utils/closingReminderHelper';
 import { getShadowStyle } from '../../src/utils/styleHelper';
 import { Colors } from '../../src/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -56,7 +57,7 @@ export default function DashboardScreen() {
         options={{
           headerTitle: () => (
             <View style={styles.headerShopRow}>
-              <Ionicons name="storefront-outline" color="#5EEAD4" size={20} />
+              <Ionicons name="storefront-outline" color="#C8E6C9" size={20} />
               <Text style={styles.headerShopName} numberOfLines={1}>
                 {profile?.shop_name || 'Warung LabaNotera'}
               </Text>
@@ -82,10 +83,10 @@ export default function DashboardScreen() {
           <View style={styles.dashboardHeaderRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.dashboardTitle}>Beranda</Text>
-              <Text style={styles.dashboardSub}>Ringkasan Keuangan & Usaha Warung (Hari Ini)</Text>
+              <Text style={styles.dashboardSub}>Ringkasan Keuangan & Usaha Warung</Text>
             </View>
             <View style={styles.todayBadge}>
-              <Ionicons name="today-outline" color="#042F2E" size={12} />
+              <Ionicons name="today-outline" color={Colors.primary} size={12} />
               <Text style={styles.todayBadgeText}>Hari Ini</Text>
             </View>
           </View>
@@ -120,28 +121,28 @@ export default function DashboardScreen() {
 
             {/* Row 2 */}
             <View style={styles.metricsRow}>
-              {/* Uang Titipan Hari Ini */}
-              <View style={styles.metricCard}>  
-                <View style={styles.metricHeader}>
-                  <Text style={styles.metricLabel} numberOfLines={1}>Total Uang Titipan</Text>
-                  <Ionicons name="people-outline" color={Colors.secondary} size={18} />
-                </View>
-                <Text style={[styles.metricValue, { color: Colors.secondary }]} numberOfLines={1}>
-                  {formatRupiah(dailySummary?.todayConsignmentOwed || 0)}
-                </Text>
-                <Text style={styles.metricSub}>Bagi Hasil Titipan</Text>
-              </View>
-
               {/* Total Transaksi Hari Ini */}
               <View style={styles.metricCard}>
                 <View style={styles.metricHeader}>
                   <Text style={styles.metricLabel} numberOfLines={1}>Total Transaksi</Text>
-                  <Ionicons name="receipt-outline" color={Colors.accent} size={18} />
+                  <Ionicons name="receipt-outline" color={Colors.primary} size={18} />
                 </View>
-                <Text style={[styles.metricValue, { color: Colors.accent }]} numberOfLines={1}>
+                <Text style={[styles.metricValue, { color: Colors.primary }]} numberOfLines={1}>
                   {dailySummary?.todayTransactionCount || 0}
                 </Text>
-                <Text style={styles.metricSub}>Transaksi Hari Ini</Text>
+                <Text style={styles.metricSub}>Struk Hari Ini</Text>
+              </View>
+
+              {/* Produk Terjual Hari Ini */}
+              <View style={styles.metricCard}>  
+                <View style={styles.metricHeader}>
+                  <Text style={styles.metricLabel} numberOfLines={1}>Barang Terjual</Text>
+                  <Ionicons name="bag-handle-outline" color={Colors.secondary} size={18} />
+                </View>
+                <Text style={[styles.metricValue, { color: Colors.secondary }]} numberOfLines={1}>
+                  {dailySummary?.todayItemsSold || 0} Item
+                </Text>
+                <Text style={styles.metricSub}>Total Item Terjual</Text>
               </View>
             </View>
           </View>
@@ -171,20 +172,20 @@ export default function DashboardScreen() {
                 </Text>
               </TouchableOpacity>
 
-              {/* Shortcut 2: Stok & Titipan */}
+              {/* Shortcut 2: Stok Warung */}
               <TouchableOpacity
                 style={styles.shortcutCard}
                 onPress={() => router.push('/(tabs)/stock')}
                 activeOpacity={0.7}
               >
-                <View style={[styles.shortcutIconBg, { backgroundColor: Colors.primaryDark }]}>
+                <View style={[styles.shortcutIconBg, { backgroundColor: '#059669' }]}>
                   <Ionicons name="cube-outline" color="#FFFFFF" size={26} />
                 </View>
                 <Text style={styles.shortcutName} numberOfLines={1}>
                   Stok Warung
                 </Text>
                 <Text style={styles.shortcutDesc} numberOfLines={1}>
-                  Stok & Persediaan
+                  Persediaan Barang
                 </Text>
               </TouchableOpacity>
             </View>
@@ -208,13 +209,13 @@ export default function DashboardScreen() {
                 </Text>
               </TouchableOpacity>
 
-              {/* Shortcut 4: Laporan */}
+              {/* Shortcut 4: Riwayat Transaksi */}
               <TouchableOpacity
                 style={styles.shortcutCard}
                 onPress={() => router.push('/(tabs)/report')}
                 activeOpacity={0.7}
               >
-                <View style={[styles.shortcutIconBg, { backgroundColor: Colors.accent }]}>
+                <View style={[styles.shortcutIconBg, { backgroundColor: '#2563EB' }]}>
                   <Ionicons name="stats-chart-outline" color="#FFFFFF" size={26} />
                 </View>
                 <Text style={styles.shortcutName} numberOfLines={1}>
@@ -313,16 +314,16 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   dashboardHero: {
-    backgroundColor: Colors.primaryDark,
-    padding: 16,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    backgroundColor: Colors.primary,
+    padding: 18,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
   dashboardHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   headerShopRow: {
     flexDirection: 'row',
@@ -332,32 +333,35 @@ const styles = StyleSheet.create({
   headerShopName: {
     color: '#FFFFFF',
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '700',
     maxWidth: 220,
   },
   dashboardTitle: {
     color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.5,
   },
   dashboardSub: {
-    color: '#CCFBF1',
+    color: '#E8F5E9',
     fontSize: 12,
     marginTop: 2,
+    opacity: 0.9,
   },
   todayBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#5EEAD4',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 9999,
     gap: 4,
+    ...getShadowStyle(1),
   },
   todayBadgeText: {
     fontSize: 11,
-    fontWeight: 'bold',
-    color: '#042F2E',
+    fontWeight: '700',
+    color: Colors.primary,
   },
   profileHeaderBtn: {
     flexDirection: 'row',
@@ -365,7 +369,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 20,
+    borderRadius: 9999,
     gap: 5,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
@@ -374,7 +378,7 @@ const styles = StyleSheet.create({
   profileHeaderBtnText: {
     color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   metricsContainer: {
     gap: 10,
@@ -386,8 +390,8 @@ const styles = StyleSheet.create({
   metricCard: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 16,
+    padding: 14,
     ...getShadowStyle(2),
   },
   metricHeader: {
@@ -402,9 +406,10 @@ const styles = StyleSheet.create({
   },
   metricValue: {
     fontSize: 17,
-    fontWeight: 'bold',
+    fontWeight: '800',
     color: Colors.text,
     marginTop: 6,
+    letterSpacing: -0.3,
   },
   metricSub: {
     fontSize: 10,
@@ -412,44 +417,45 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   shortcutsSection: {
-    paddingHorizontal: 14,
-    marginTop: 16,
+    paddingHorizontal: 16,
+    marginTop: 18,
   },
   sectionHeaderTitle: {
-    fontSize: 15,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '800',
     color: Colors.text,
-    marginBottom: 10,
+    marginBottom: 12,
+    letterSpacing: -0.3,
   },
   shortcutsContainer: {
-    gap: 10,
+    gap: 12,
   },
   shortcutsRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
   },
   shortcutCard: {
     flex: 1,
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
+    borderRadius: 20,
+    paddingVertical: 16,
+    paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#F0F3F1',
     ...getShadowStyle(1),
   },
   shortcutIconBg: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+    width: 50,
+    height: 50,
+    borderRadius: 9999,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   shortcutName: {
     fontSize: 13,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: Colors.text,
     textAlign: 'center',
     marginBottom: 2,
@@ -460,80 +466,84 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   recentSection: {
-    paddingHorizontal: 14,
-    marginTop: 20,
+    paddingHorizontal: 16,
+    marginTop: 22,
   },
   recentHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 10,
   },
   seeAllText: {
-    fontSize: 12,
-    fontWeight: 'bold',
+    fontSize: 13,
+    fontWeight: '700',
     color: Colors.primary,
   },
   trxItemCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 8,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#F0F3F1',
+    ...getShadowStyle(1),
   },
   trxCode: {
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: Colors.text,
   },
   badgeCancelled: {
     backgroundColor: '#FEE2E2',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 9999,
     borderWidth: 1,
     borderColor: '#FECACA',
   },
   badgeCancelledText: {
     fontSize: 10,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: Colors.danger,
   },
   trxMeta: {
     fontSize: 11,
     color: Colors.textMuted,
-    marginTop: 2,
+    marginTop: 3,
   },
   trxAmountCol: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
   },
   trxAmount: {
     fontSize: 14,
-    fontWeight: 'bold',
-    color: Colors.primaryDark,
+    fontWeight: '800',
+    color: Colors.primary,
   },
   trxDebtSub: {
     fontSize: 10,
     color: Colors.danger,
-    fontWeight: 'bold',
+    fontWeight: '700',
     marginTop: 1,
   },
   emptyCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 24,
+    borderRadius: 18,
+    padding: 28,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#F0F3F1',
+    ...getShadowStyle(1),
   },
   emptyText: {
     fontSize: 13,
     color: Colors.textMuted,
     marginTop: 8,
+    fontWeight: '500',
   },
 });

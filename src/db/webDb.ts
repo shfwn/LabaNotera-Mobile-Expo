@@ -20,6 +20,7 @@ class WebSQLiteDatabase {
         bank_account_number: '',
         bank_account_holder: '',
         qris_image_uri: null,
+        closing_time: '21:00',
       },
     ],
   };
@@ -57,6 +58,7 @@ class WebSQLiteDatabase {
                 bank_account_number: '',
                 bank_account_holder: '',
                 qris_image_uri: null,
+                closing_time: '21:00',
               },
             ];
           }

@@ -6,16 +6,17 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
-  SafeAreaView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Platform } from 'react-native';
 import { useAppSQLiteContext as useSQLiteContext } from '../../src/db/AppDatabaseProvider';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { FinancialReportSummary, Transaction } from '../../src/types';
-import { getFinancialSummary } from '../../src/services/reportService';
+import { getFinancialSummary, getDailyFullReportData } from '../../src/services/reportService';
 import { getRecentTransactions } from '../../src/services/posService';
+import { exportDailyReportPdf } from '../../src/utils/pdfReportHelper';
 import {
   formatRupiah,
   formatTanggal,
@@ -23,7 +24,7 @@ import {
 } from '../../src/utils/formatters';
 import { showAppAlert } from '../../src/utils/alertHelper';
 import { getShadowStyle } from '../../src/utils/styleHelper';
-import { Colors } from '../../src/constants/theme';
+import { Colors, Radius, Shadows } from '../../src/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function ReportScreen() {
@@ -32,6 +33,7 @@ export default function ReportScreen() {
 
   const [summary, setSummary] = useState<FinancialReportSummary | null>(null);
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
+  const [isExporting, setIsExporting] = useState(false);
 
   const loadReportData = useCallback(async () => {
     try {
@@ -52,101 +54,14 @@ export default function ReportScreen() {
   );
 
   const handleExportPdfReport = async () => {
-    if (!summary) return;
-
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8" />
-          <style>
-            body { font-family: Arial, sans-serif; padding: 20px; color: #0f172a; }
-            h1 { color: #0d9488; text-align: center; font-size: 22px; }
-            .header-info { text-align: center; margin-bottom: 20px; color: #475569; font-size: 12px; }
-            .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
-            .row { display: flex; justify-content: space-between; margin-bottom: 8px; }
-            .label { color: #475569; font-size: 14px; }
-            .value { font-weight: bold; font-size: 15px; }
-            .highlight { background: #dcfce7; border: 1px solid #16a34a; border-radius: 8px; padding: 16px; margin-top: 16px; }
-            .highlight-title { font-size: 14px; color: #166534; font-weight: bold; }
-            .highlight-val { font-size: 24px; color: #15803d; font-weight: bold; margin-top: 4px; }
-            .footer { text-align: center; margin-top: 30px; font-size: 11px; color: #94a3b8; }
-          </style>
-        </head>
-        <body>
-          <h1>LAPORAN KEUANGAN LABA-RUGI</h1>
-          <div class="header-info">Aplikasi LabaNotera • Dicetak pada ${formatTanggal(new Date())}</div>
-
-          <div class="card">
-            <div class="row">
-              <span class="label">Total Penjualan (Omset)</span>
-              <span class="value">${formatRupiah(summary.totalRevenue)}</span>
-            </div>
-            <div class="row">
-              <span class="label">Total Modal HPP Barang Terjual</span>
-              <span class="value" style="color: #dc2626;">-${formatRupiah(summary.totalHPP)}</span>
-            </div>
-            <hr style="border: 0.5px dashed #cbd5e1;" />
-            <div class="row" style="margin-top: 8px;">
-              <span class="label" style="font-weight: bold;">Laba Kotor (Gross Profit)</span>
-              <span class="value" style="color: #0d9488;">${formatRupiah(summary.grossProfit)}</span>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="row">
-              <span class="label">Pengeluaran Prive (Uang Dapur Pribadi)</span>
-              <span class="value" style="color: #d97706;">-${formatRupiah(summary.totalPrive)}</span>
-            </div>
-            <div class="row">
-              <span class="label">Biaya Operasional Warung</span>
-              <span class="value" style="color: #dc2626;">-${formatRupiah(summary.totalExpense)}</span>
-            </div>
-            <div class="row">
-              <span class="label">Belanja Stok / Kulakan dari Laci Kasir</span>
-              <span class="value" style="color: #2563eb;">-${formatRupiah(summary.totalRestock || 0)}</span>
-            </div>
-          </div>
-
-          <div class="highlight">
-            <div class="highlight-title">ESTIMASI LABA BERSIH WARUNG</div>
-            <div class="highlight-val">${formatRupiah(summary.netProfit)}</div>
-          </div>
-
-          <div class="card" style="margin-top: 16px;">
-            <div class="row">
-              <span class="label">Bagi Hasil Barang Titipan Terutang</span>
-              <span class="value" style="color: #d97706;">${formatRupiah(summary.totalConsignmentOwed)}</span>
-            </div>
-            <div class="row" style="margin-top: 6px;">
-              <span class="label">Total Transaksi Selesai</span>
-              <span class="value">${summary.transactionCount} Transaksi</span>
-            </div>
-          </div>
-
-          <div class="footer">
-            Dibuat secara otomatis oleh LabaNotera App (Kasir & Manajemen Stok Offline-First)
-          </div>
-        </body>
-      </html>
-    `;
-
     try {
-      if (Platform.OS === 'web') {
-        await Print.printAsync({ html: htmlContent });
-      } else {
-        const { uri } = await Print.printToFileAsync({ html: htmlContent });
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(uri, {
-            mimeType: 'application/pdf',
-            dialogTitle: 'Laporan_Keuangan_LabaNotera',
-          });
-        } else {
-          await Print.printAsync({ html: htmlContent });
-        }
-      }
+      setIsExporting(true);
+      const dailyData = await getDailyFullReportData(db);
+      await exportDailyReportPdf(dailyData);
     } catch (err: any) {
-      showAppAlert('Gagal Ekspor PDF', err.message || 'Gagal mengekspor laporan PDF.');
+      showAppAlert('Gagal Ekspor PDF', err.message || 'Gagal membuat dokumen laporan PDF.');
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -158,14 +73,22 @@ export default function ReportScreen() {
           <TouchableOpacity
             style={styles.priveBtn}
             onPress={() => router.push('/prive-modal')}
+            activeOpacity={0.8}
           >
-            <Ionicons name="wallet-outline" color="#FFFFFF" size={18} />
-            <Text style={styles.priveBtnText}>Catat Uang Dapur / Prive</Text>
+            <Ionicons name="wallet-outline" color="#FFFFFF" size={16} />
+            <Text style={styles.priveBtnText} numberOfLines={1}>Catat Biaya / Prive</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.pdfBtn} onPress={handleExportPdfReport}>
-            <Ionicons name="document-text-outline" color={Colors.primaryDark} size={18} />
-            <Text style={styles.pdfBtnText}>Ekspor PDF</Text>
+          <TouchableOpacity
+            style={[styles.pdfBtn, isExporting && { opacity: 0.6 }]}
+            onPress={handleExportPdfReport}
+            disabled={isExporting}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="document-text-outline" color="#FFFFFF" size={16} />
+            <Text style={styles.pdfBtnText} numberOfLines={1}>
+              {isExporting ? 'Memproses...' : 'Ekspor PDF Harian'}
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -206,10 +129,10 @@ export default function ReportScreen() {
 
         {/* Breakdown Box: Uang Dapur & Biaya Operasional */}
         <View style={styles.expenseSummaryBox}>
-          <Text style={styles.expenseSummaryTitle}>Pengeluaran Kas Laci (Kulakan, Prive & Biaya)</Text>
+          <Text style={styles.expenseSummaryTitle}>Pengeluaran Kas Laci (Belanja Stok, Prive & Biaya)</Text>
           
           <View style={styles.expenseRow}>
-            <Text style={styles.expenseLabel}>Belanja Stok / Kulakan Laci</Text>
+            <Text style={styles.expenseLabel}>Belanja Stok Barang (Kas Laci)</Text>
             <Text style={[styles.expenseVal, { color: Colors.primaryDark }]}>
               -{formatRupiah(summary?.totalRestock || 0)}
             </Text>
@@ -228,6 +151,15 @@ export default function ReportScreen() {
               -{formatRupiah(summary?.totalExpense || 0)}
             </Text>
           </View>
+
+          {(summary?.totalConsignmentOwed || 0) > 0 ? (
+            <View style={styles.expenseRow}>
+              <Text style={styles.expenseLabel}>Bagi Hasil Barang Titipan (Terutang)</Text>
+              <Text style={[styles.expenseVal, { color: Colors.secondary }]}>
+                {formatRupiah(summary?.totalConsignmentOwed || 0)}
+              </Text>
+            </View>
+          ) : null}
 
           <View style={[styles.expenseRow, { borderTopWidth: 1, borderTopColor: '#F1F5F9', marginTop: 6, paddingTop: 6 }]}>
             <Text style={[styles.expenseLabel, { fontWeight: 'bold' }]}>Laba Kotor (Omset - HPP)</Text>
@@ -306,13 +238,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   scrollContent: {
-    padding: 14,
+    padding: 16,
     paddingBottom: 40,
   },
   actionButtonsRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
+    gap: 10,
+    marginBottom: 14,
   },
   priveBtn: {
     flex: 1,
@@ -321,63 +253,67 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
-    borderRadius: 10,
+    paddingHorizontal: 8,
+    borderRadius: Radius.full,
     gap: 6,
+    ...Shadows.glow(0.15, Colors.secondary),
   },
   priveBtnText: {
     color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 13,
+    fontWeight: '700',
+    fontSize: 12.5,
+    textAlign: 'center',
   },
   pdfBtn: {
-    backgroundColor: Colors.primaryLight,
-    borderWidth: 1,
-    borderColor: Colors.primary,
+    flex: 1,
+    backgroundColor: Colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 14,
     paddingVertical: 12,
-    borderRadius: 10,
+    paddingHorizontal: 8,
+    borderRadius: Radius.full,
     gap: 6,
+    ...Shadows.glow(0.15),
   },
   pdfBtnText: {
-    color: Colors.primaryDark,
-    fontWeight: 'bold',
-    fontSize: 13,
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12.5,
+    textAlign: 'center',
   },
   heroCard: {
-    backgroundColor: Colors.primaryDark,
-    borderRadius: 14,
+    backgroundColor: Colors.primary,
+    borderRadius: Radius.xl2,
     padding: 18,
     marginBottom: 16,
-    ...getShadowStyle(3),
+    ...Shadows.glow(0.25),
   },
   heroLabel: {
-    color: Colors.primaryLight,
-    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 12,
     fontWeight: '600',
   },
   heroValue: {
     color: '#FFFFFF',
     fontSize: 28,
-    fontWeight: 'bold',
+    fontWeight: '800',
     marginVertical: 4,
   },
   heroSub: {
-    color: '#E2E8F0',
+    color: 'rgba(255, 255, 255, 0.8)',
     fontSize: 11,
     lineHeight: 16,
   },
   sectionHeader: {
     fontSize: 15,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: Colors.text,
     marginBottom: 10,
   },
   gridContainer: {
     gap: 8,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   metricsRow: {
     flexDirection: 'row',
@@ -386,10 +322,11 @@ const styles = StyleSheet.create({
   metricCard: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    padding: 12,
+    borderRadius: Radius.lg,
+    padding: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.borderLight,
+    ...Shadows.card,
   },
   metricHeader: {
     flexDirection: 'row',
@@ -397,12 +334,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   metricTitle: {
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.textMuted,
+    fontWeight: '600',
   },
   metricValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 15,
+    fontWeight: '700',
     color: Colors.text,
     marginTop: 6,
   },
@@ -413,15 +351,16 @@ const styles = StyleSheet.create({
   },
   expenseSummaryBox: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     padding: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
-    marginBottom: 12,
+    borderColor: Colors.borderLight,
+    marginBottom: 14,
+    ...Shadows.card,
   },
   expenseSummaryTitle: {
     fontSize: 13,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: Colors.textSecondary,
     marginBottom: 8,
   },
@@ -436,36 +375,35 @@ const styles = StyleSheet.create({
   },
   expenseVal: {
     fontSize: 13,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: Colors.danger,
   },
   trxRowCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    padding: 12,
+    borderRadius: Radius.lg,
+    padding: 14,
     marginBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.borderLight,
+    ...Shadows.card,
   },
   trxCode: {
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: Colors.text,
   },
   badgeCancelled: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: Colors.dangerLight,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#FECACA',
+    borderRadius: Radius.full,
   },
   badgeCancelledText: {
     fontSize: 10,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: Colors.danger,
   },
   trxMeta: {
@@ -479,24 +417,24 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   trxAmount: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: Colors.primaryDark,
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.primary,
   },
   trxDebtSub: {
     fontSize: 10,
     color: Colors.danger,
-    fontWeight: 'bold',
+    fontWeight: '700',
     marginTop: 1,
   },
   emptyBox: {
     alignItems: 'center',
     padding: 30,
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     marginTop: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.borderLight,
   },
   emptyText: {
     fontSize: 13,
